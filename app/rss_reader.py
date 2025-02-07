@@ -36,6 +36,7 @@ def parse_rss_feed(response: requests.Response) -> List[Dict]:
         entries = []
 
         for item in soup.find_all('item'):  # Atom形式の場合は 'entry'
+            print(item) # 追加: item の内容を確認
             entry = {
                 'title': item.title.text if item.title else None,
                 'link': item.link.text if item.link else None,
@@ -44,6 +45,7 @@ def parse_rss_feed(response: requests.Response) -> List[Dict]:
                 'content': item.find('content').text if item.find('content') else None, #contentタグ
                 'id': item.id.text if item.id else None,
             }
+            print(entry)  # 追加: entry の内容を確認
             entries.append(entry)
         #find_allの結果が空の場合を考慮し、findで処理を行う。
         feed_title = soup.find('title').text if soup.find('title') else None

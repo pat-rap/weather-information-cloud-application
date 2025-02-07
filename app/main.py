@@ -88,8 +88,17 @@ async def read_rss(feed_type: str):
             """, (url, feed_title, feed_subtitle, feed_updated_dt, feed_id_in_atom, rights, category, frequency_type, datetime.now()), fetchone=True)['id']
 
         # 2. feed_entries テーブルへの挿入
+        print(entries) #entriesの内容を確認
         for entry in entries:
-            entry_updated_dt = datetime.strptime(entry['updated'], '%Y-%m-%dT%H:%M:%S%z') if entry['updated'] else None
+            #entry_updated_dt = datetime.strptime(entry['updated'], '%Y-%m-%dT%H:%M:%S%z') if entry['updated'] else None
+            try:
+                entry_updated_dt = datetime.strptime(entry['updated'], '%Y-%m-%dT%H:%M:%S%z') if entry['updated'] else None
+            except ValueError:
+                try:
+                    entry_updated_dt = datetime.strptime(entry['updated'], '%Y-%m-%dT%H:%M:%S') if entry['updated'] else None  # %z がない場合
+                except ValueError:
+                    entry_updated_dt = None #さらに柔軟に対応
+            print(feed_id, entry['id'], entry['title'], entry_updated_dt, entry['author'], entry['link'], entry['content'])#挿入データを確認
             execute_sql("""
                 INSERT INTO feed_entries (feed_id, entry_id_in_atom, entry_title, entry_updated, entry_author, entry_link, entry_content)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
