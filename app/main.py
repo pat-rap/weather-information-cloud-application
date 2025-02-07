@@ -4,6 +4,11 @@ from .auth import get_current_user, set_auth_cookie, remove_auth_cookie, TokenDa
 from .rss_reader import fetch_rss_feed, parse_rss_feed
 from .database import execute_sql
 
+import logging
+# ルートロガーの設定
+logging.basicConfig(level=logging.DEBUG)  # DEBUG レベル以上のログを出力
+logger = logging.getLogger(__name__)
+
 app = FastAPI()
 
 # last_modified をフィードタイプごとに保持する辞書
@@ -88,7 +93,7 @@ async def read_rss(feed_type: str):
             """, (url, feed_title, feed_subtitle, feed_updated_dt, feed_id_in_atom, rights, category, frequency_type, datetime.now()), fetchone=True)['id']
 
         # 2. feed_entries テーブルへの挿入
-        print(entries) #entriesの内容を確認
+        logger.debug(f"read_rss entries: {entries}") # DEBUG レベルのログ
         for entry in entries:
             #entry_updated_dt = datetime.strptime(entry['updated'], '%Y-%m-%dT%H:%M:%S%z') if entry['updated'] else None
             try:
@@ -98,7 +103,7 @@ async def read_rss(feed_type: str):
                     entry_updated_dt = datetime.strptime(entry['updated'], '%Y-%m-%dT%H:%M:%S') if entry['updated'] else None  # %z がない場合
                 except ValueError:
                     entry_updated_dt = None #さらに柔軟に対応
-            print(feed_id, entry['id'], entry['title'], entry_updated_dt, entry['author'], entry['link'], entry['content'])#挿入データを確認
+            logger.debug(f"read_rss INSERT DATA: {feed_id, entry['id'], entry['title'], entry_updated_dt, entry['author'], entry['link'], entry['content']}") # DEBUG レベルのログ
             execute_sql("""
                 INSERT INTO feed_entries (feed_id, entry_id_in_atom, entry_title, entry_updated, entry_author, entry_link, entry_content)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
