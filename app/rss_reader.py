@@ -40,7 +40,7 @@ def parse_rss_feed(response: requests.Response) -> List[Dict]:
         soup = BeautifulSoup(response.content, 'xml')
         entries = []
 
-        for item in soup.find_all('item'):  # Atom形式の場合は 'entry'
+        for item in soup.find_all('entry'):  # Atom形式の場合は 'entry'
             logger.debug(f"parse_rss_feed item: {item}") # DEBUG レベルのログ item の内容を確認
             entry = {
                 'title': item.title.text if item.title else None,
@@ -64,4 +64,3 @@ def parse_rss_feed(response: requests.Response) -> List[Dict]:
     except Exception as e:
         print(f"Error parsing RSS feed: {e}")
         return [], None, None, None, None, None
-
