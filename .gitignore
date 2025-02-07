@@ -1,0 +1,9 @@
+misc/
+__pycache__/
+*.log
+*.pyc
+WICA/
+.python-version
+alembic.ini
+alembic/
+.env
