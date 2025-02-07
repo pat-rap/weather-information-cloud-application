@@ -1,7 +1,8 @@
 from fastapi import FastAPI, Depends, Response, Request
-from .auth import get_current_user, set_auth_cookie, remove_auth_cookie, TokenData
-from .rss_reader import fetch_rss_feed, parse_rss_feed
+from auth import get_current_user, set_auth_cookie, remove_auth_cookie, TokenData
+from rss_reader import fetch_rss_feed, parse_rss_feed
 from datetime import datetime
+from database import execute_sql
 
 app = FastAPI()
 
@@ -37,16 +38,21 @@ async def logout(response: Response):
 @app.get("/rss/{feed_type}")
 async def read_rss(feed_type: str):
     global last_modified_times
-    if feed_type == "regular":
-        url = "https://www.data.jma.go.jp/developer/xml/feed/regular.xml"
-    elif feed_type == "extra":
-        url = "https://www.data.jma.go.jp/developer/xml/feed/extra.xml"
-    elif feed_type == "eqvol":
-        url = "https://www.data.jma.go.jp/developer/xml/feed/eqvol.xml"
-    elif feed_type == "other":
-        url = "https://www.data.jma.go.jp/developer/xml/feed/other.xml"
-    else:
+
+    # URL とカテゴリ、更新頻度種別を辞書にまとめる
+    feed_info = {
+        "regular": {"url": "https://www.data.jma.go.jp/developer/xml/feed/regular.xml", "category": "天気概況", "frequency_type": "高頻度"},
+        "extra": {"url": "https://www.data.jma.go.jp/developer/xml/feed/extra.xml", "category": "警報・注意報", "frequency_type": "高頻度"},
+        "eqvol": {"url": "https://www.data.jma.go.jp/developer/xml/feed/eqvol.xml", "category": "地震・火山", "frequency_type": "高頻度"},
+        "other": {"url": "https://www.data.jma.go.jp/developer/xml/feed/other.xml", "category": "その他", "frequency_type": "高頻度"},
+    }
+
+    if feed_type not in feed_info:
         return {"error": "Invalid feed type"}
+
+    url = feed_info[feed_type]["url"]
+    category = feed_info[feed_type]["category"]
+    frequency_type = feed_info[feed_type]["frequency_type"]
 
     response = fetch_rss_feed(url, last_modified_times[feed_type])
     if response is None:  # 304 Not Modified
@@ -60,7 +66,36 @@ async def read_rss(feed_type: str):
         if last_modified_str:
             last_modified_times[feed_type] = datetime.strptime(last_modified_str, '%a, %d %b %Y %H:%M:%S %Z')
 
-        return {"feed_title": feed_title, "entries": entries, "feed_subtitle":feed_subtitle, "feed_updated":feed_updated, "feed_id_in_atom":feed_id_in_atom, "rights":rights}
-    else:
-        return {"message": "No update or error fetching feed"} #fetch_rss_feed内で例外が発生した場合
+        # --- データベース挿入処理 ---
+        # 1. feed_meta テーブルへの挿入/更新
+        feed_updated_dt = datetime.strptime(feed_updated, '%Y-%m-%dT%H:%M:%S%z') if feed_updated else None
 
+        existing_feed = execute_sql("SELECT id FROM feed_meta WHERE feed_url = %s", (url,), fetchone=True)
+        if existing_feed:
+            # 既存レコードの更新
+            feed_id = existing_feed['id']
+            execute_sql("""
+                UPDATE feed_meta
+                SET feed_title = %s, feed_subtitle = %s, feed_updated = %s, feed_id_in_atom = %s, rights = %s, category = %s, frequency_type = %s, last_fetched = %s
+                WHERE id = %s
+            """, (feed_title, feed_subtitle, feed_updated_dt, feed_id_in_atom, rights, category, frequency_type, datetime.now(), feed_id))
+        else:
+            # 新規レコードの挿入
+            feed_id = execute_sql("""
+                INSERT INTO feed_meta (feed_url, feed_title, feed_subtitle, feed_updated, feed_id_in_atom, rights, category, frequency_type, last_fetched)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+            """, (url, feed_title, feed_subtitle, feed_updated_dt, feed_id_in_atom, rights, category, frequency_type, datetime.now()), fetchone=True)['id']
+
+        # 2. feed_entries テーブルへの挿入
+        for entry in entries:
+            entry_updated_dt = datetime.strptime(entry['updated'], '%Y-%m-%dT%H:%M:%S%z') if entry['updated'] else None
+            execute_sql("""
+                INSERT INTO feed_entries (feed_id, entry_id_in_atom, entry_title, entry_updated, entry_author, entry_link, entry_content)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, (feed_id, entry['id'], entry['title'], entry_updated_dt, entry['author'], entry['link'], entry['content']))
+
+        return {"message": f"Data for {feed_type} inserted/updated successfully."}
+
+    else:
+        return {"message": "No update or error fetching feed"}
