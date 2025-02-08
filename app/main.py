@@ -31,9 +31,9 @@ regions = {
     "近畿": ["滋賀県", "京都府", "大阪府", "兵庫県", "奈良県", "和歌山県"],
     "中国": ["鳥取県", "島根県", "岡山県", "広島県", "山口県"],
     "四国": ["徳島県", "香川県", "愛媛県", "高知県"],
-    "九州": ["福岡県", "佐賀県", "長崎県", "熊本県", "大分県", "宮崎県", "鹿児島県", "奄美地方"],  # 山口県は含めない
+    "九州": ["福岡県", "佐賀県", "長崎県", "熊本県", "大分県", "宮崎県", "鹿児島県", "奄美地方"],
     "沖縄": ["沖縄本島地方", "大東島地方", "宮古島地方", "八重山地方"],
-    "空港": ["新千歳空港", "成田空港", "羽田空港", "中部国際空港", "関西国際空港", "福岡空港", "那覇空港"] # 必要に応じて
+    "空港": ["新千歳空港", "成田空港", "羽田空港", "中部国際空港", "関西国際空港", "福岡空港", "那覇空港"],
 }
 
 @app.get("/")
@@ -108,7 +108,7 @@ async def read_rss(feed_type: str, region: Optional[str] = Query(None), prefectu
                 RETURNING id
             """, (url, feed_title, feed_subtitle, feed_updated_dt, feed_id_in_atom, rights, category, frequency_type, datetime.now()), fetchone=True)['id']
 
-        # 2. feed_entries テーブルへの挿入 (都道府県ごとに分割)
+        # 2. feed_entries テーブルへの挿入 (都道府県ごとに分割, 重複排除)
         logger.debug(f"read_rss entries: {entries}")
         for entry in entries:
             try:
@@ -118,6 +118,12 @@ async def read_rss(feed_type: str, region: Optional[str] = Query(None), prefectu
                     entry_updated_dt = datetime.strptime(entry['updated'], '%Y-%m-%dT%H:%M:%S') if entry['updated'] else None
                 except ValueError:
                     entry_updated_dt = None
+
+            # 重複チェック
+            existing_entry = execute_sql("SELECT id FROM feed_entries WHERE entry_id_in_atom = %s", (entry['id'],), fetchone=True)
+            if existing_entry:
+                logger.info(f"Skipping duplicate entry: {entry['id']}")
+                continue  # 重複エントリはスキップ
 
             # 都道府県ごとにレコードを挿入
             for prefecture_item in entry['prefectures']:
