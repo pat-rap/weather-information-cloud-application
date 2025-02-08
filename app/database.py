@@ -2,6 +2,7 @@ import psycopg2
 from psycopg2.extras import DictCursor
 from dotenv import load_dotenv
 import os
+from datetime import datetime, timedelta # 追加
 
 load_dotenv()
 
@@ -38,10 +39,19 @@ def execute_sql(sql: str, params=None, fetchone=False, fetchall=False):
 def init_db():
     """db.sqlを実行してテーブルを初期化する"""
     try:
-        with open("db.sql", "r", encoding="utf-8") as f:  # encoding="utf-8" を追加
+        with open("db.sql", "r", encoding="utf-8") as f:
             sql = f.read()
         execute_sql(sql)
         print("Database initialized successfully.")
     except Exception as e:
         print(f"Error initializing database: {e}")
+
+def delete_old_entries(days: int = 7): # 追加
+    """指定された日数以上前のエントリを削除する"""
+    try:
+        cutoff_date = datetime.now() - timedelta(days=days)
+        execute_sql("DELETE FROM feed_entries WHERE inserted_at < %s", (cutoff_date,))
+        print(f"{days}日以上前のエントリを削除しました。")
+    except Exception as e:
+        print(f"Error deleting old entries: {e}")
 
