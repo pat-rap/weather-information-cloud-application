@@ -1,0 +1,16 @@
+{% if entries %}
+    <h2>{{ feed_title }}</h2>
+    <ul>
+    {% for entry in entries %}
+        <li>
+            <strong>{{ entry.entry_title }}</strong> ({{ entry.publishing_office }}) - {{ entry.entry_updated }}
+            {% if entry.entry_link %}
+                <a href="{{ entry.entry_link }}" target="_blank" rel="noopener noreferrer">詳細</a>
+            {% endif %}
+            <p>{{ entry.entry_content }}</p>
+        </li>
+    {% endfor %}
+    </ul>
+{% else %}
+    <p>該当する情報はありません。</p>
+{% endif %}

@@ -35,7 +35,7 @@ last_modified_times = {
 async def root(request: Request,
                current_user: TokenData = Depends(get_current_user),
                selected_region: Optional[str] = Cookie(None), #Cookieから取得
-               selected_prefecture: Optional[str] = Cookie(None) #Cookieから取得
+               selected_prefecture: Optional[str] = Cookie(None), #Cookieから取得
                selected_feed_type: Optional[str] = Cookie("extra") #Cookieから取得
                ):
     """
