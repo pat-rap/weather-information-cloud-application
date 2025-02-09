@@ -58,7 +58,7 @@ def extract_prefecture_from_content(content: str) -> List[str]:
                     "徳島県", "香川県", "愛媛県", "高知県",
                     "山口県", "福岡県", "大分県", "長崎県", "佐賀県", "熊本県", "宮崎県", "鹿児島県", "奄美地方",
                     "沖縄本島地方", "大東島地方", "宮古島地方", "八重山地方",
-                    "新千歳空港", "成田空港", "羽田空港", "中部国際空港", "関西国際空港", "福岡空港", "那覇空港"]
+                    "新千歳空港", "成田国際空港", "東京国際空港", "中部国際空港", "関西国際空港", "福岡空港", "那覇空港"]
     for pref in prefectures:
         if pref in content:
             prefectures_found.append(pref)
@@ -181,7 +181,7 @@ def parse_rss_feed(response: requests.Response) -> List[Dict]:
         entries = []
 
         for item in soup.find_all('entry'):
-            logger.debug(f"parse_rss_feed item: {item}")
+            #logger.debug(f"parse_rss_feed item: {item}")
 
             author_name = item.find('author').find('name').text if item.find('author') and item.find('author').find('name') else None
 
@@ -213,7 +213,7 @@ def parse_rss_feed(response: requests.Response) -> List[Dict]:
                 'id': item.id.text if item.id else None,
                 'prefectures': prefectures # 都道府県 (複数)
             }
-            logger.debug(f"parse_rss_feed entry: {entry}")
+            #logger.debug(f"parse_rss_feed entry: {entry}")
             entries.append(entry)
 
         feed_title = soup.find('title').text if soup.find('title') else None

@@ -23,17 +23,109 @@ last_modified_times = {
 
 # 地域と都道府県(地方)の対応 (必要に応じて拡充)
 regions = {
-    "北海道": ["宗谷地方", "上川・留萌地方", "網走・北見・紋別地方", "十勝地方", "釧路・根室地方", "胆振・日高地方", "石狩・空知・後志地方", "渡島・檜山地方"],
-    "東北": ["青森県", "岩手県", "宮城県", "秋田県", "山形県", "福島県"],
-    "関東甲信": ["茨城県", "栃木県", "群馬県", "埼玉県", "千葉県", "東京都", "神奈川県", "山梨県", "長野県"],
-    "東海": ["岐阜県", "静岡県", "愛知県", "三重県"],
+    "北海道": ["宗谷地方", "上川・留萌地方", "石狩・空知・後志地方", "網走・北見・紋別地方", "釧路・根室地方", "十勝地方", "胆振・日高地方", "渡島・檜山地方"],
+    "東北": ["青森県", "秋田県", "岩手県", "宮城県", "山形県", "福島県"],
+    "関東甲信": ["茨城県", "栃木県", "群馬県", "埼玉県", "東京都", "千葉県", "神奈川県", "長野県", "山梨県"],
+    "東海": ["静岡県", "愛知県", "岐阜県", "三重県"],
     "北陸": ["新潟県", "富山県", "石川県", "福井県"],
     "近畿": ["滋賀県", "京都府", "大阪府", "兵庫県", "奈良県", "和歌山県"],
-    "中国": ["鳥取県", "島根県", "岡山県", "広島県", "山口県"],
+    "中国": ["岡山県", "広島県", "島根県", "鳥取県", "山口県"],
     "四国": ["徳島県", "香川県", "愛媛県", "高知県"],
-    "九州": ["福岡県", "佐賀県", "長崎県", "熊本県", "大分県", "宮崎県", "鹿児島県", "奄美地方"],
+    "九州": ["福岡県", "大分県", "長崎県", "佐賀県", "熊本県", "宮崎県", "鹿児島県", "奄美地方"],
     "沖縄": ["沖縄本島地方", "大東島地方", "宮古島地方", "八重山地方"],
-    "空港": ["新千歳空港", "成田空港", "羽田空港", "中部国際空港", "関西国際空港", "福岡空港", "那覇空港"],
+    "空港": ["新千歳空港", "成田国際空港", "東京国際空港", "中部国際空港", "関西国際空港", "福岡空港", "那覇空港"]
+}
+
+# publishing_office と prefecture のマッピング (例)
+# これは rss_reader.py の get_prefecture_from_kishodai と重複する部分があるので、
+# どちらか一方にまとめるか、設定ファイルに外出しするのが望ましい
+publishing_office_mapping = {
+    # 北海道
+    "稚内地方気象台": ["宗谷地方"],
+    "旭川地方気象台": ["上川・留萌地方"],
+    "札幌管区気象台": ["石狩・空知・後志地方"],
+    "網走地方気象台": ["網走・北見・紋別地方"],
+    "釧路地方気象台": ["釧路・根室地方"],
+    "帯広測候所": ["十勝地方"],
+    "室蘭地方気象台": ["胆振・日高地方"],
+    "函館地方気象台": ["渡島・檜山地方"],
+    
+    # 東北
+    "青森地方気象台": ["青森県"],
+    "秋田地方気象台": ["秋田県"],
+    "盛岡地方気象台": ["岩手県"],
+    "仙台管区気象台": ["宮城県"],
+    "山形地方気象台": ["山形県"],
+    "福島地方気象台": ["福島県"],
+    
+    # 関東甲信
+    "水戸地方気象台": ["茨城県"],
+    "宇都宮地方気象台": ["栃木県"],
+    "前橋地方気象台": ["群馬県"],
+    "熊谷地方気象台": ["埼玉県"],
+    "東京管区気象台": ["東京都"],
+    "銚子地方気象台": ["千葉県"],
+    "横浜地方気象台": ["神奈川県"],
+    "長野地方気象台": ["長野県"],
+    "甲府地方気象台": ["山梨県"],
+    
+    # 東海
+    "静岡地方気象台": ["静岡県"],
+    "名古屋地方気象台": ["愛知県"],
+    "岐阜地方気象台": ["岐阜県"],
+    "津地方気象台": ["三重県"],
+    
+    # 北陸
+    "新潟地方気象台": ["新潟県"],
+    "富山地方気象台": ["富山県"],
+    "金沢地方気象台": ["石川県"],
+    "福井地方気象台": ["福井県"],
+    
+    # 近畿
+    "彦根地方気象台": ["滋賀県"],
+    "京都地方気象台": ["京都府"],
+    "大阪管区気象台": ["大阪府"],
+    "神戸地方気象台": ["兵庫県"],
+    "奈良地方気象台": ["奈良県"],
+    "和歌山地方気象台": ["和歌山県"],
+    
+    # 中国
+    "岡山地方気象台": ["岡山県"],
+    "広島地方気象台": ["広島県"],
+    "松江地方気象台": ["島根県"],
+    "鳥取地方気象台": ["鳥取県"],
+    
+    # 四国
+    "徳島地方気象台": ["徳島県"],
+    "高松地方気象台": ["香川県"],
+    "松山地方気象台": ["愛媛県"],
+    "高知地方気象台": ["高知県"],
+    
+    # 九州（山口含む）
+    "下関地方気象台": ["山口県"],
+    "福岡管区気象台": ["福岡県"],
+    "大分地方気象台": ["大分県"],
+    "長崎地方気象台": ["長崎県"],
+    "佐賀地方気象台": ["佐賀県"],
+    "熊本地方気象台": ["熊本県"],
+    "宮崎地方気象台": ["宮崎県"],
+    "鹿児島地方気象台": ["鹿児島県"],
+    "名瀬測候所": ["奄美地方"],
+    
+    # 沖縄
+    "沖縄気象台": ["沖縄本島"],
+    "南大東島地方気象台": ["大東島地方"],
+    "宮古島地方気象台": ["宮古島地方"],
+    "石垣島地方気象台": ["八重山地方"],
+    
+    # 空港
+    "新千歳航空測候所": ["新千歳空港"],
+    "成田航空地方気象台": ["成田空港"],
+    "東京航空地方気象台": ["羽田空港"],
+    "中部航空地方気象台": ["中部国際空港"],
+    "関西航空地方気象台": ["関西国際空港"],
+    "福岡航空地方気象台": ["福岡空港"],
+    "那覇航空測候所": ["那覇空港"]
 }
 
 @app.get("/")
@@ -57,7 +149,7 @@ async def logout(response: Response):
     return {"message": "Logged out."}
 
 @app.get("/rss/{feed_type}")
-async def read_rss(feed_type: str, region: Optional[str] = Query(None), prefecture: Optional[str] = Query(None)):
+async def read_rss(feed_type: str, region: Optional[str] = Query(None), prefecture: Optional[str] = Query(None), publishing_office: Optional[str] = Query(None)):
     global last_modified_times
 
     # URL とカテゴリ、更新頻度種別を辞書にまとめる
@@ -108,7 +200,7 @@ async def read_rss(feed_type: str, region: Optional[str] = Query(None), prefectu
                 RETURNING id
             """, (url, feed_title, feed_subtitle, feed_updated_dt, feed_id_in_atom, rights, category, frequency_type, datetime.now()), fetchone=True)['id']
 
-        # 2. feed_entries テーブルへの挿入 (都道府県ごとに分割, 重複排除)
+        # 2. feed_entries テーブルへの挿入 (都道府県ごとに分割)
         logger.debug(f"read_rss entries: {entries}")
         for entry in entries:
             try:
@@ -118,12 +210,6 @@ async def read_rss(feed_type: str, region: Optional[str] = Query(None), prefectu
                     entry_updated_dt = datetime.strptime(entry['updated'], '%Y-%m-%dT%H:%M:%S') if entry['updated'] else None
                 except ValueError:
                     entry_updated_dt = None
-
-            # 重複チェック
-            existing_entry = execute_sql("SELECT id FROM feed_entries WHERE entry_id_in_atom = %s", (entry['id'],), fetchone=True)
-            if existing_entry:
-                logger.info(f"Skipping duplicate entry: {entry['id']}")
-                continue  # 重複エントリはスキップ
 
             # 都道府県ごとにレコードを挿入
             for prefecture_item in entry['prefectures']:
@@ -137,7 +223,19 @@ async def read_rss(feed_type: str, region: Optional[str] = Query(None), prefectu
         query = "SELECT * FROM feed_entries WHERE feed_id = %s"
         params = [feed_id]
 
-        if region:
+        if publishing_office:
+            query += " AND publishing_office = %s"
+            params.append(publishing_office)
+        elif prefecture:
+            # prefecture から publishing_office を特定
+            offices = [office for office, prefs in publishing_office_mapping.items() if prefecture in prefs]
+            if offices:
+                placeholders = ', '.join(['%s'] * len(offices))
+                query += f" AND publishing_office IN ({placeholders})"
+                params.extend(offices)
+            else: # prefectureに対応するofficeがない場合
+                return {"message": f"No data found for prefecture: {prefecture}"}
+        elif region:
             # regions辞書を使って、regionに対応するprefectureのリストを取得
             prefectures_in_region = regions.get(region, [])
             if prefectures_in_region:
@@ -147,10 +245,6 @@ async def read_rss(feed_type: str, region: Optional[str] = Query(None), prefectu
                 params.extend(prefectures_in_region) # パラメータを追加
             else: #regionに対応する都道府県がない場合
                 return {"message": f"No data found for region: {region}"}
-
-        if prefecture:
-            query += " AND prefecture = %s"
-            params.append(prefecture)
 
         query += " ORDER BY entry_updated DESC" # 新しい順に取得
         filtered_entries = execute_sql(query, tuple(params), fetchall=True)
