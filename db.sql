@@ -25,5 +25,6 @@ CREATE TABLE IF NOT EXISTS feed_entries (
     entry_link TEXT,
     entry_content TEXT,
     prefecture TEXT,       -- 都道府県
-    inserted_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    inserted_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (feed_id, entry_id_in_atom, publishing_office) -- 複合ユニークキー
 );
