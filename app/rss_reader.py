@@ -2,7 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 from typing import List, Dict, Optional
 from datetime import datetime
-from .config import PUBLISHING_OFFICE_MAPPING, PREFECTURES  # config.py からインポート
+from .config import PUBLISHING_OFFICE_MAPPING, PREFECTURES, get_prefecture_from_kishodai  # config.py からインポート
 
 import logging
 # ルートロガーの設定
@@ -84,14 +84,6 @@ def parse_detail_xml(url:str) -> tuple[List[str],Optional[str]]:
             return [], None
     else:
         return [], None
-
-def get_prefecture_from_kishodai(kishodai_name: str) -> List[str]:
-    """気象台名から都道府県名を推測(複数県対応)"""
-    prefectures = []
-    if not kishodai_name:
-        return prefectures
-
-    return PUBLISHING_OFFICE_MAPPING.get(kishodai_name, []) # 見つからない場合は空リスト
 
 def parse_rss_feed(response: requests.Response) -> List[Dict]:
     """
