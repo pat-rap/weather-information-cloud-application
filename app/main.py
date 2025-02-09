@@ -110,6 +110,7 @@ async def read_rss(feed_type: str, region: Optional[str] = Query(None), prefectu
                 execute_sql("""
                     INSERT INTO feed_entries (feed_id, entry_id_in_atom, entry_title, entry_updated, publishing_office, entry_link, entry_content, prefecture)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (feed_id, entry_id_in_atom, publishing_office) DO NOTHING  -- 重複時は何もしない
                 """, (feed_id, entry['id'], entry['title'], entry_updated_dt, entry['publishing_office'], entry['link'], entry['content'], prefecture_item))
 
         # 3. フィルタリング (データベースから取得)
