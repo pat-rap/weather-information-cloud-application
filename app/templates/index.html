@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>気象情報</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="/static/js/script.js" defer></script>
+</head>
+<body>
+    <h1>気象情報</h1>
+
+    {% if username %}
+        <p>ようこそ、{{ username }}さん</p>
+        <a href="/logout">ログアウト</a>
+
+        <form action="/select_location" method="post">
+            <div>
+                <label for="region">地域:</label>
+                <select id="region" name="region" onchange="updatePrefectures()">
+                    <option value="">-- 選択してください --</option>
+                    {% for region_name in regions %}
+                        <option value="{{ region_name }}" {% if region_name == selected_region %}selected{% endif %}>{{ region_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label for="prefecture">都道府県:</label>
+                <select id="prefecture" name="prefecture">
+                    <option value="">-- 選択してください --</option>
+                    <!-- ここに都道府県のオプションが動的に挿入される -->
+                    {% if selected_region %}
+                        {% for pref in regions[selected_region] %}
+                            <option value="{{ pref }}" {% if pref == selected_prefecture %}selected{% endif %}>{{ pref }}</option>
+                        {% endfor %}
+                    {% endif %}
+                </select>
+            </div>
+            <div>
+                <label for="feed_type">データの種類:</label>
+                <select id="feed_type" name="feed_type">
+                    <option value="extra">警報・注意報</option>
+                    <option value="eqvol">地震・火山</option>
+                    <option value="other">その他</option>
+                    {# <option value="regular">天気概況</option>  コメントアウト #}
+                </select>
+            </div>
+            <button type="submit">表示</button>
+        </form>
+
+         <div id="feed-data">
+            <!-- ここにフィードデータが表示される（feed_data.htmlの内容） -->
+        </div>
+
+    {% else %}
+        <p>ログインしていません。</p>
+        <a href="/start">ログイン</a>
+    {% endif %}
+</body>
+</html>

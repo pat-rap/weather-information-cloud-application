@@ -1,0 +1,19 @@
+/* 簡単なスタイル */
+body {
+    font-family: sans-serif;
+}
+
+label {
+    display: block;
+    margin-bottom: 5px;
+}
+
+select {
+    margin-bottom: 10px;
+}
+
+#feed-data {
+    margin-top: 20px;
+    border: 1px solid #ccc;
+    padding: 10px;
+}

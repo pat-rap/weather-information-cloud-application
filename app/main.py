@@ -1,17 +1,27 @@
-from fastapi import FastAPI, Depends, Response, Request, BackgroundTasks, Query
+from fastapi import FastAPI, Depends, Response, Request, BackgroundTasks, Query, Form, HTTPException, Cookie
+from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from datetime import datetime
 from typing import List, Optional
+import logging
+from urllib.parse import quote_plus
 from .auth import get_current_user, set_auth_cookie, remove_auth_cookie, TokenData
 from .rss_reader import fetch_rss_feed, parse_rss_feed
 from .database import execute_sql, delete_old_entries
-from .config import PUBLISHING_OFFICE_MAPPING, REGIONS  # config.py からインポート
-import logging
+from .config import PUBLISHING_OFFICE_MAPPING, REGIONS, PREFECTURES
 
 # ルートロガーの設定
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 app = FastAPI()
+
+# staticフォルダを静的ファイルとしてマウント
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
+# templatesフォルダを指定
+templates = Jinja2Templates(directory="app/templates")
 
 # last_modified をフィードタイプごとに保持する辞書
 last_modified_times = {
@@ -21,9 +31,28 @@ last_modified_times = {
     "other": None
 }
 
-@app.get("/")
-async def root():
-    return {"message": "Hello World"}
+@app.get("/", response_class=HTMLResponse)
+async def root(request: Request,
+               current_user: TokenData = Depends(get_current_user),
+               selected_region: Optional[str] = Cookie(None), #Cookieから取得
+               selected_prefecture: Optional[str] = Cookie(None) #Cookieから取得
+               selected_feed_type: Optional[str] = Cookie("extra") #Cookieから取得
+               ):
+    """
+    トップページを表示。
+    ログイン状態に応じて、認証開始ボタンまたは項目表示ページへのリンクを表示。
+    """
+    # テンプレートに渡す変数
+    context = {
+        "request": request,
+        "regions": REGIONS,
+        "prefectures": PREFECTURES,
+        "selected_region": selected_region,
+        "selected_prefecture": selected_prefecture,
+        "selected_feed_type": selected_feed_type, # 追加
+        "username": current_user.username if current_user else None, # ユーザー名
+    }
+    return templates.TemplateResponse("index.html", context)
 
 @app.get("/start")
 async def start(response: Response):
@@ -39,15 +68,30 @@ async def read_items(current_user: TokenData = Depends(get_current_user)):
 @app.get("/logout")
 async def logout(response: Response):
     remove_auth_cookie(response)
-    return {"message": "Logged out."}
+    # トップページにリダイレクト
+    return RedirectResponse("/", status_code=302)
+
+@app.post("/select_location")
+async def select_location(response: Response, region: str = Form(...), prefecture: str = Form(...), feed_type: str = Form(...)):
+    """
+    選択された地域と都道府県をクッキーに保存し、/rss/{feed_type} にリダイレクト。
+    """
+    # URLエンコード (日本語などのマルチバイト文字を安全に扱うため)
+    encoded_region = quote_plus(region)
+    encoded_prefecture = quote_plus(prefecture)
+
+    response.set_cookie(key="selected_region", value=encoded_region)
+    response.set_cookie(key="selected_prefecture", value=encoded_prefecture)
+    response.set_cookie(key="selected_feed_type", value=feed_type)  # feed_type を保存
+    return RedirectResponse(f"/rss/{feed_type}", status_code=302) #選択されたfeed_typeのページにリダイレクト
 
 @app.get("/rss/{feed_type}")
-async def read_rss(feed_type: str, region: Optional[str] = Query(None), prefecture: Optional[str] = Query(None), publishing_office: Optional[str] = Query(None)):
+async def read_rss(feed_type: str, request: Request, region:  Optional[str] = Query(None), prefecture: Optional[str] = Query(None), current_user: TokenData = Depends(get_current_user)):
     global last_modified_times
 
     # URL とカテゴリ、更新頻度種別を辞書にまとめる
     feed_info = {
-        "regular": {"url": "https://www.data.jma.go.jp/developer/xml/feed/regular.xml", "category": "天気概況", "frequency_type": "高頻度"},
+        #"regular": {"url": "https://www.data.jma.go.jp/developer/xml/feed/regular.xml", "category": "天気概況", "frequency_type": "高頻度"},
         "extra": {"url": "https://www.data.jma.go.jp/developer/xml/feed/extra.xml", "category": "警報・注意報", "frequency_type": "高頻度"},
         "eqvol": {"url": "https://www.data.jma.go.jp/developer/xml/feed/eqvol.xml", "category": "地震・火山", "frequency_type": "高頻度"},
         "other": {"url": "https://www.data.jma.go.jp/developer/xml/feed/other.xml", "category": "その他", "frequency_type": "高頻度"},
@@ -62,7 +106,37 @@ async def read_rss(feed_type: str, region: Optional[str] = Query(None), prefectu
 
     response = fetch_rss_feed(url, last_modified_times[feed_type])
     if response is None:
-        return {"message": "No update or error fetching feed"}
+        #return {"message": "No update or error fetching feed"}
+        # 更新がない場合は、DBから最新の10件を取得して表示
+        query = "SELECT * FROM feed_entries"
+        params = []
+
+        if region:
+            prefectures_in_region = REGIONS.get(region, [])
+            if prefectures_in_region:
+                placeholders = ', '.join(['%s'] * len(prefectures_in_region))
+                query += f" WHERE prefecture IN ({placeholders})"
+                params.extend(prefectures_in_region)
+            else:
+                raise HTTPException(status_code=404, detail=f"No data found for region: {region}")
+
+        if prefecture:
+            if "WHERE" in query:
+                query += " AND prefecture = %s"
+            else:
+                query += " WHERE prefecture = %s"
+            params.append(prefecture)
+
+        query += " ORDER BY entry_updated DESC LIMIT 10" # 最新の10件を取得
+        filtered_entries = execute_sql(query, tuple(params), fetchall=True)
+
+        context = {
+            "request": request,
+            "feed_title": category,
+            "entries": filtered_entries,
+            "username": current_user.username if current_user else None,
+        }
+        return templates.TemplateResponse("feed_data.html", context) # feed_data.html を表示
 
     if response:
         entries, feed_title, feed_subtitle, feed_updated, feed_id_in_atom, rights = parse_rss_feed(response)
@@ -110,26 +184,14 @@ async def read_rss(feed_type: str, region: Optional[str] = Query(None), prefectu
                 execute_sql("""
                     INSERT INTO feed_entries (feed_id, entry_id_in_atom, entry_title, entry_updated, publishing_office, entry_link, entry_content, prefecture)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (feed_id, entry_id_in_atom, publishing_office) DO NOTHING  -- 重複時は何もしない
+                    ON CONFLICT (feed_id, entry_id_in_atom, publishing_office) DO NOTHING
                 """, (feed_id, entry['id'], entry['title'], entry_updated_dt, entry['publishing_office'], entry['link'], entry['content'], prefecture_item))
 
         # 3. フィルタリング (データベースから取得)
         query = "SELECT * FROM feed_entries WHERE feed_id = %s"
         params = [feed_id]
 
-        if publishing_office:
-            query += " AND publishing_office = %s"
-            params.append(publishing_office)
-        elif prefecture:
-            # prefecture から publishing_office を特定
-            offices = [office for office, prefs in PUBLISHING_OFFICE_MAPPING.items() if prefecture in prefs]
-            if offices:
-                placeholders = ', '.join(['%s'] * len(offices))
-                query += f" AND publishing_office IN ({placeholders})"
-                params.extend(offices)
-            else: # prefectureに対応するofficeがない場合
-                return Response(content=f"No data found for prefecture: {prefecture}", status_code=404)
-        elif region:
+        if region:
             # regions辞書を使って、regionに対応するprefectureのリストを取得
             prefectures_in_region = REGIONS.get(region, [])
             if prefectures_in_region:
@@ -138,17 +200,66 @@ async def read_rss(feed_type: str, region: Optional[str] = Query(None), prefectu
                 query += f" AND prefecture IN ({placeholders})"
                 params.extend(prefectures_in_region) # パラメータを追加
             else: #regionに対応する都道府県がない場合
-                return Response(content=f"No data found for region: {region}", status_code=404)
+                #return {"message": f"No data found for region: {region}"}
+                raise HTTPException(status_code=404, detail=f"No data found for region: {region}")
 
-        query += " ORDER BY entry_updated DESC" # 新しい順に取得
+        if prefecture:
+            query += " AND prefecture = %s"
+            params.append(prefecture)
+
+        query += " ORDER BY entry_updated DESC LIMIT 10" # 新しい順に取得
         filtered_entries = execute_sql(query, tuple(params), fetchall=True)
 
-        return {"message": f"Data for {feed_type} inserted/updated successfully.", "entries": filtered_entries}
+        #return {"message": f"Data for {feed_type} inserted/updated successfully.", "entries": filtered_entries}
+        context = {
+            "request": request,
+            "feed_title": feed_title,
+            "entries": filtered_entries,
+            "username": current_user.username if current_user else None,
+        }
+        return templates.TemplateResponse("feed_data.html", context)
 
     else:
-        return {"message": "No update or error fetching feed"}
+        #return {"message": "No update or error fetching feed"}
+        # 更新がない場合は、DBから最新の10件を取得して表示
+        query = "SELECT * FROM feed_entries"
+        params = []
+
+        if region:
+            prefectures_in_region = REGIONS.get(region, [])
+            if prefectures_in_region:
+                placeholders = ', '.join(['%s'] * len(prefectures_in_region))
+                query += f" WHERE prefecture IN ({placeholders})"
+                params.extend(prefectures_in_region)
+            else:
+                raise HTTPException(status_code=404, detail=f"No data found for region: {region}")
+
+        if prefecture:
+            if "WHERE" in query:
+                query += " AND prefecture = %s"
+            else:
+                query += " WHERE prefecture = %s"
+            params.append(prefecture)
+
+        query += " ORDER BY entry_updated DESC LIMIT 10" # 最新の10件を取得
+        filtered_entries = execute_sql(query, tuple(params), fetchall=True)
+
+        context = {
+            "request": request,
+            "feed_title": category,
+            "entries": filtered_entries,
+            "username": current_user.username if current_user else None,
+        }
+        return templates.TemplateResponse("feed_data.html", context) # feed_data.html を表示
 
 @app.get("/delete_old_entries")
 async def delete_old_entries_endpoint(background_tasks: BackgroundTasks):
     background_tasks.add_task(delete_old_entries, days=7)
     return {"message": "Scheduled deletion of old entries."}
+
+@app.get("/get_prefectures")
+async def get_prefectures(region: str = Query(...)):
+    """
+    指定された地域に対応する都道府県のリストを返す。
+    """
+    return REGIONS.get(region, [])
