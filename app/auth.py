@@ -1,7 +1,7 @@
+from fastapi import Depends, HTTPException, status, Request, Response
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import Depends, HTTPException, status, Request, Response
 from jose import JWTError, jwt
 from pydantic import BaseModel
 
@@ -46,17 +46,16 @@ def verify_token(token: str) -> TokenData:
         )
     return token_data
 
-def get_current_user(request: Request):
+async def get_current_user(request: Request):
     token = request.cookies.get("access_token")
     if not token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    user = verify_token(token)
-    return user
+        return None  # 未認証の場合は None を返す
 
+    try:
+        user = verify_token(token)
+        return user
+    except HTTPException: #HTTPExceptionをキャッチ
+        return None
 
 def set_auth_cookie(response: Response, user_data: dict):
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -65,7 +64,5 @@ def set_auth_cookie(response: Response, user_data: dict):
     )
     response.set_cookie(key="access_token", value=access_token, httponly=True, secure=False, samesite="lax") # secure=True は HTTPS 環境でのみ有効
 
-
 def remove_auth_cookie(response: Response):
     response.delete_cookie("access_token")
-
