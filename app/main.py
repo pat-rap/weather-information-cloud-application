@@ -5,7 +5,7 @@ from fastapi.templating import Jinja2Templates
 from datetime import datetime
 from typing import List, Optional
 import logging
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, unquote_plus
 from .auth import get_current_user, set_auth_cookie, remove_auth_cookie, TokenData
 from .rss_reader import fetch_rss_feed, parse_rss_feed
 from .database import execute_sql, delete_old_entries
@@ -83,13 +83,33 @@ async def select_location(response: Response, region: str = Form(...), prefectur
     response.set_cookie(key="selected_region", value=encoded_region)
     response.set_cookie(key="selected_prefecture", value=encoded_prefecture)
     response.set_cookie(key="selected_feed_type", value=feed_type)  # feed_type を保存
-    return RedirectResponse(f"/rss/{feed_type}", status_code=302) #選択されたfeed_typeのページにリダイレクト
+
+    # リダイレクトURLにクエリパラメータを追加
+    redirect_url = f"/rss/{feed_type}?region={encoded_region}&prefecture={encoded_prefecture}"
+    return RedirectResponse(redirect_url, status_code=302)
 
 @app.get("/rss/{feed_type}")
 async def read_rss(feed_type: str, request: Request, region:  Optional[str] = Query(None), prefecture: Optional[str] = Query(None), current_user: TokenData = Depends(get_current_user)):
     global last_modified_times
 
-    # URL とカテゴリ、更新頻度種別を辞書にまとめる
+    logger.debug(f"receive region: {region} receive prefecture: {prefecture}")
+    # クッキーから値を取得
+    selected_region = request.cookies.get("selected_region")
+    selected_prefecture = request.cookies.get("selected_prefecture")
+    # URLデコード
+    if selected_region:
+        selected_region = unquote_plus(selected_region)
+    if selected_prefecture:
+        selected_prefecture = unquote_plus(selected_prefecture)
+
+    # region, prefecture が Query Parameter で指定されていない場合、クッキーの値を使う
+    if region is None:
+        region = selected_region
+    if prefecture is None:
+        prefecture = selected_prefecture
+    logger.debug(f"fixed region: {region} fixed prefecture: {prefecture}")
+
+    # フィードの種類に応じて、対応するURLを取得
     feed_info = {
         #"regular": {"url": "https://www.data.jma.go.jp/developer/xml/feed/regular.xml", "category": "天気概況", "frequency_type": "高頻度"},
         "extra": {"url": "https://www.data.jma.go.jp/developer/xml/feed/extra.xml", "category": "警報・注意報", "frequency_type": "高頻度"},
@@ -103,7 +123,6 @@ async def read_rss(feed_type: str, request: Request, region:  Optional[str] = Qu
     url = feed_info[feed_type]["url"]
     category = feed_info[feed_type]["category"]
     response = fetch_rss_feed(url, last_modified_times[feed_type])
-
     # --- RSS フィードが取得できなかった場合 (更新がない、またはエラー) ---
     if response is None:
         query = "SELECT * FROM feed_entries"
@@ -125,7 +144,10 @@ async def read_rss(feed_type: str, request: Request, region:  Optional[str] = Qu
                 query += " WHERE prefecture = %s"
             params.append(prefecture)
 
+        query += f" AND feed_id = (SELECT id FROM feed_meta WHERE feed_url = '{url}')" # feed_idでフィルタリング
         query += " ORDER BY entry_updated DESC LIMIT 10"
+        print(f"DEBUG - SQL Query (response is None): {query}")  # デバッグ出力
+        print(f"DEBUG - SQL Params (response is None): {params}")  # デバッグ出力
         filtered_entries = execute_sql(query, tuple(params), fetchall=True)
 
         context = {
@@ -166,7 +188,7 @@ async def read_rss(feed_type: str, request: Request, region:  Optional[str] = Qu
 
 
         # 2. feed_entries テーブルへの挿入 (都道府県ごとに分割)
-        logger.debug(f"read_rss entries: {entries}")
+        #logger.debug(f"read_rss entries: {entries}")
         for entry in entries:
             try:
                 entry_updated_dt = datetime.strptime(entry['updated'], '%Y-%m-%dT%H:%M:%S%z') if entry['updated'] else None
@@ -178,7 +200,7 @@ async def read_rss(feed_type: str, request: Request, region:  Optional[str] = Qu
 
             # 都道府県ごとにレコードを挿入
             for prefecture_item in entry['prefectures']:
-                logger.debug(f"read_rss INSERT DATA: {feed_id}, {entry['id']}, {entry['title']}, {entry_updated_dt}, {entry['publishing_office']}, {entry['link']}, {entry['content']}, {prefecture_item}")
+                #logger.debug(f"read_rss INSERT DATA: {feed_id}, {entry['id']}, {entry['title']}, {entry_updated_dt}, {entry['publishing_office']}, {entry['link']}, {entry['content']}, {prefecture_item}")
                 execute_sql("""
                     INSERT INTO feed_entries (feed_id, entry_id_in_atom, entry_title, entry_updated, publishing_office, entry_link, entry_content, prefecture)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
@@ -205,6 +227,8 @@ async def read_rss(feed_type: str, request: Request, region:  Optional[str] = Qu
             params.append(prefecture)
 
         query += " ORDER BY entry_updated DESC LIMIT 10" # 新しい順に取得
+        print(f"DEBUG - SQL Query: {query}")  # デバッグ出力
+        print(f"DEBUG - SQL Params: {params}")  # デバッグ出力
         filtered_entries = execute_sql(query, tuple(params), fetchall=True)
 
         context = {
