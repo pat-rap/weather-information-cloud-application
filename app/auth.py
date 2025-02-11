@@ -7,6 +7,10 @@ from pydantic import BaseModel
 
 from dotenv import load_dotenv
 import os
+import logging
+# ルートロガーの設定
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -48,6 +52,7 @@ def verify_token(token: str) -> TokenData:
 
 async def get_current_user(request: Request):
     token = request.cookies.get("access_token")
+    logger.debug(f"Request cookies: {request.cookies}")
     if not token:
         return None  # 未認証の場合は None を返す
 
@@ -62,7 +67,17 @@ def set_auth_cookie(response: Response, user_data: dict):
     access_token = create_access_token(
         data=user_data, expires_delta=access_token_expires
     )
-    response.set_cookie(key="access_token", value=access_token, httponly=True, secure=False, samesite="lax") # secure=True は HTTPS 環境でのみ有効
+    logger.debug(f"Setting cookie: access_token={access_token}, path=/, httponly=True, secure={response.headers.get('Set-Cookie')}")
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=False,  # ローカル開発環境では False
+        samesite="lax",  # または "strict"
+        path="/",  # クッキーの有効パスをルートに設定
+        # domain="yourdomain.com",  # 必要に応じてドメインを設定
+    )
+    logger.debug(f"Response headers after set_cookie: {response.headers}")
 
 def remove_auth_cookie(response: Response):
     response.delete_cookie("access_token")

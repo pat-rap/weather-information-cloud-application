@@ -42,9 +42,6 @@ async def root(request: Request,
     トップページを表示。
     ログイン状態に応じて、認証開始ボタンまたは項目表示ページへのリンクを表示。
     """
-    print(f"DEBUG: current_user in root: {current_user}")  # デバッグプリント
-    logger.debug(f"function root user_name: {current_user.username if current_user else 'None'}")    # テンプレートに渡す変数
-
     context = {
         "request": request,
         "regions": REGIONS,
@@ -59,9 +56,10 @@ async def root(request: Request,
 @app.get("/start")
 async def start(response: Response):
     # 本来は、ここでユーザー情報を取得・生成する処理が入る
+    redirect_resp = RedirectResponse("/", status_code=302)
     user_data = {"sub": "testuser"}
-    set_auth_cookie(response, user_data)
-    return {"message": "Authentication started.  Cookie set."}
+    set_auth_cookie(redirect_resp, user_data)
+    return redirect_resp
 
 @app.get("/items")
 async def read_items(current_user: TokenData = Depends(get_current_user)):
@@ -69,9 +67,10 @@ async def read_items(current_user: TokenData = Depends(get_current_user)):
 
 @app.get("/logout")
 async def logout(response: Response):
-    remove_auth_cookie(response)
     # トップページにリダイレクト
-    return RedirectResponse("/", status_code=302)
+    redirect_resp = RedirectResponse("/", status_code=302)
+    remove_auth_cookie(redirect_resp)
+    return redirect_resp
 
 @app.post("/select_location")
 async def select_location(response: Response, region: str = Form(...), prefecture: str = Form(...), feed_type: str = Form(...)):
