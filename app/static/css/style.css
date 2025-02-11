@@ -1,6 +1,27 @@
-/* 簡単なスタイル */
+:root {
+    --body-font: sans-serif;
+    --base-padding: 10px;
+    --feed-border: 1px solid #ccc;
+    --feed-padding: 10px;
+    --light-bg: #fff;
+    --light-text: #000;
+    --dark-bg: #333;
+    --dark-text: #eee;
+    --select-bg: #fff;
+    --select-text: #000;
+    --select-border: 1px solid #ccc;
+    --button-bg: #eee;
+    --button-text: #000;
+    --button-border: 1px solid #ccc;
+}
+
+/* 共通スタイル */
 body {
-    font-family: sans-serif;
+    font-family: var(--body-font);
+    background-color: var(--light-bg);
+    color: var(--light-text);
+    margin: 0;
+    padding: var(--base-padding);
 }
 
 label {
@@ -10,46 +31,54 @@ label {
 
 select {
     margin-bottom: 10px;
+    background-color: var(--select-bg);
+    color: var(--select-text);
+    border: var(--select-border);
+}
+
+button {
+    background-color: var(--button-bg);
+    color: var(--button-text);
+    border: var(--button-border);
+    padding: 5px 10px;
+    cursor: pointer;
 }
 
 #feed-data {
     margin-top: 20px;
-    border: 1px solid #ccc;
-    padding: 10px;
+    border: var(--feed-border);
+    padding: var(--feed-padding);
 }
 
-/* ダークテーマ用スタイル */
+/* ダークテーマ用スタイル - 見た目のみの上書き */
 body.dark-mode {
-    background-color: #333;
-    color: #eee;
+    background-color: var(--dark-bg);
+    color: var(--dark-text);
 }
 
-/* ラベルやテキストはそのまま */
-body.dark-mode label,
-body.dark-mode h1,
-body.dark-mode p {
-    color: #eee;
-}
-
-/* セレクトボックスのスタイル調整 */
 body.dark-mode select {
     background-color: #444;
     color: #fff;
     border: 1px solid #777;
 }
 
-/* ボタンのスタイル調整 */
 body.dark-mode button {
     background-color: #555;
     color: #fafafa;
     border: 1px solid #777;
-    padding: 5px 10px;
-    cursor: pointer;
 }
 
-/* フィードデータのエリア */
 body.dark-mode #feed-data {
     border-color: #555;
     background-color: #444;
-    color: #eee;
+    color: var(--dark-text);
+}
+
+body.dark-mode a {
+    color: #00aced; /* 明るい青など視認性の高い色を指定 */
+    text-decoration: underline;
+}
+
+body.dark-mode a:hover {
+    color: #66d9ff; /* マウスオーバー時に少し明るくする */
 }
