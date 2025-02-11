@@ -44,57 +44,66 @@ function getCookie(name) {
 // クッキーに値を設定する関数 (必要に応じてエスケープ処理を追加)
 function setCookie(name, value) {
     document.cookie = `${name}=${encodeURIComponent(value)};path=/`;
-  }
+}
 
-  // ページ読み込み時の処理
+// ページ読み込み時の処理
 document.addEventListener('DOMContentLoaded', () => {
+    console.log("DOMContentLoaded event fired");
+
     const regionSelect = document.getElementById('region');
     const feedTypeSelect = document.getElementById('feed_type');
+    const fontIncreaseBtn = document.getElementById('font-increase');
+    const fontDecreaseBtn = document.getElementById('font-decrease');
+    const themeToggleBtn = document.getElementById('theme-toggle');
 
     // クッキーから selected_region を取得し、region セレクトボックスの値を設定
-    const selectedRegion = getCookie('selected_region');
-    if (selectedRegion) {
-        regionSelect.value = decodeURIComponent(selectedRegion);
-    }
-
-    // updatePrefectures は region が選択されている場合のみ実行
-    if (selectedRegion) {
-        updatePrefectures();
+    if (regionSelect) {
+        const selectedRegion = getCookie('selected_region');
+        if (selectedRegion) {
+            regionSelect.value = decodeURIComponent(selectedRegion);
+            updatePrefectures(); // region がある場合のみ実行
+        }
     }
 
     // selected_feed_type をクッキーから取得し、該当する項目を選択状態にする
-    const selectedFeedType = getCookie('selected_feed_type');
-    if (selectedFeedType) {
-        feedTypeSelect.value = selectedFeedType;
-    } else {
-        // クッキーに feed_type がない場合の初期値を設定
-        feedTypeSelect.value = "extra";
-        setCookie('selected_feed_type', 'extra');
+    if (feedTypeSelect) {
+        const selectedFeedType = getCookie('selected_feed_type');
+        if (selectedFeedType) {
+            feedTypeSelect.value = selectedFeedType;
+        } else {
+            feedTypeSelect.value = "extra";
+            setCookie('selected_feed_type', 'extra');
+        }
     }
-    updatePrefectures();
 
     // 文字サイズ変更
-    const fontIncreaseBtn = document.getElementById('font-increase');
-    const fontDecreaseBtn = document.getElementById('font-decrease');
     let currentFontSize = parseFloat(window.getComputedStyle(document.body).fontSize) || 16;
-    
-    fontIncreaseBtn.addEventListener('click', () => {
-        currentFontSize = Math.min(currentFontSize + 2, 36);
-        document.body.style.fontSize = currentFontSize + 'px';
-    });
-    
-    fontDecreaseBtn.addEventListener('click', () => {
-        currentFontSize = Math.max(currentFontSize - 2, 10);
-        document.body.style.fontSize = currentFontSize + 'px';
-    });
-    
-    // テーマ切替
-    const themeToggleBtn = document.getElementById('theme-toggle');
-    themeToggleBtn.addEventListener('click', () => {
-        document.body.classList.toggle('dark-mode');
-    });
 
-    // フォーム送信時のイベントハンドラーを追加
+    if (fontIncreaseBtn) {
+        fontIncreaseBtn.addEventListener('click', () => {
+            console.log("Font increase button clicked");
+            currentFontSize = Math.min(currentFontSize + 2, 36);
+            document.body.style.fontSize = currentFontSize + 'px';
+        });
+    }
+
+    if (fontDecreaseBtn) {
+        fontDecreaseBtn.addEventListener('click', () => {
+            console.log("Font decrease button clicked");
+            currentFontSize = Math.max(currentFontSize - 2, 10);
+            document.body.style.fontSize = currentFontSize + 'px';
+        });
+    }
+
+    // テーマ切替
+    if (themeToggleBtn) {
+        themeToggleBtn.addEventListener('click', () => {
+            console.log("Theme toggle button clicked");
+            document.body.classList.toggle('dark-mode');
+        });
+    }
+
+    // フォーム送信時のイベントハンドラー
     const form = document.querySelector('form');
     if (form) {
         form.addEventListener('submit', async (e) => {
@@ -105,23 +114,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const prefecture = formData.get('prefecture');
             const feedType = formData.get('feed_type');
 
-            // クッキーに選択値を保存
             setCookie('selected_region', region);
             setCookie('selected_prefecture', prefecture);
             setCookie('selected_feed_type', feedType);
 
             const encodedRegion = encodeURIComponent(region);
             const encodedPrefecture = encodeURIComponent(prefecture);
-
-            // 非同期でRSSフィードのHTMLを取得し、div#feed-data に表示
             const rssUrl = `/rss/${feedType}?region=${encodedRegion}&prefecture=${encodedPrefecture}`;
+
             try {
-                const response = await fetch(rssUrl, {
-                    credentials: 'same-origin'
-                });
+                const response = await fetch(rssUrl, { credentials: 'same-origin' });
                 if (response.ok) {
-                    const htmlContent = await response.text();
-                    document.getElementById('feed-data').innerHTML = htmlContent;
+                    document.getElementById('feed-data').innerHTML = await response.text();
                 } else {
                     document.getElementById('feed-data').innerHTML = `<p>フィードの取得に失敗しました。</p>`;
                 }
@@ -132,48 +136,39 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // ★★★ ページ読み込み時にフィードデータを取得して表示 ★★★
-    async function loadFeedData() {
-        let region = getCookie('selected_region');
-        let prefecture = getCookie('selected_prefecture');
-        const feedType = getCookie('selected_feed_type') || 'extra'; // デフォルト値
-
-        // URLパラメータをチェックし、クッキーよりも優先する
-        const urlParams = new URLSearchParams(window.location.search);
-        const urlRegion = urlParams.get('region');
-        const urlPrefecture = urlParams.get('prefecture');
-
-        if (urlRegion) {
-          region = urlRegion;
-        }
-        if (urlPrefecture) {
-          prefecture = urlPrefecture
-        }
-
-        if (region && prefecture) {
-            const encodedRegion = encodeURIComponent(region);
-            const encodedPrefecture = encodeURIComponent(prefecture);
-            const rssUrl = `/rss/${feedType}?region=${encodedRegion}&prefecture=${encodedPrefecture}`;
-            console.log(rssUrl)
-            try {
-                const response = await fetch(rssUrl, { credentials: 'same-origin' });
-                if (response.ok) {
-                    const htmlContent = await response.text();
-                    document.getElementById('feed-data').innerHTML = htmlContent;
-                } else {
-                    document.getElementById('feed-data').innerHTML = `<p>フィードの取得に失敗しました。</p>`;
+    // ページ読み込み時にフィードデータを取得して表示
+    if (regionSelect) {
+        async function loadFeedData() {
+            let region = getCookie('selected_region');
+            let prefecture = getCookie('selected_prefecture');
+            const feedType = getCookie('selected_feed_type') || 'extra';
+    
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlRegion = urlParams.get('region');
+            const urlPrefecture = urlParams.get('prefecture');
+    
+            if (urlRegion) region = urlRegion;
+            if (urlPrefecture) prefecture = urlPrefecture;
+    
+            if (region && prefecture) {
+                const encodedRegion = encodeURIComponent(region);
+                const encodedPrefecture = encodeURIComponent(prefecture);
+                const rssUrl = `/rss/${feedType}?region=${encodedRegion}&prefecture=${encodedPrefecture}`;
+                console.log(rssUrl)
+                try {
+                    const response = await fetch(rssUrl, { credentials: 'same-origin' });
+                    if (response.ok) {
+                        document.getElementById('feed-data').innerHTML = await response.text();
+                    } else {
+                        document.getElementById('feed-data').innerHTML = `<p>フィードの取得に失敗しました。</p>`;
+                    }
+                } catch (error) {
+                    console.error(error);
+                    document.getElementById('feed-data').innerHTML = `<p>エラーが発生しました。</p>`;
                 }
-            } catch (error) {
-                console.error(error);
-                document.getElementById('feed-data').innerHTML = `<p>エラーが発生しました。</p>`;
             }
         }
-    }
-
-    loadFeedData(); // ページロード時に実行
-
-    // region が変更されたら、prefectureSelectを更新
-    if (regionSelect) {
+        loadFeedData();
         regionSelect.addEventListener('change', updatePrefectures);
     }
 });
