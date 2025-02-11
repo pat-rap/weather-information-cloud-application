@@ -1,15 +1,15 @@
-from fastapi import FastAPI, Depends, Response, Request, BackgroundTasks, Query, Form, HTTPException, Cookie
+from fastapi import FastAPI, Depends, Response, Request, BackgroundTasks, Query, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from datetime import datetime
-from typing import List, Optional
+from typing import Optional
 import logging
-from urllib.parse import quote_plus, unquote_plus
+from urllib.parse import unquote_plus
 from .auth import get_current_user, set_auth_cookie, remove_auth_cookie, TokenData
 from . import rss_reader
 from .database import execute_sql, delete_old_entries
-from .config import PUBLISHING_OFFICE_MAPPING, REGIONS, PREFECTURES
+from .config import REGIONS, PREFECTURES
 
 # ルートロガーの設定
 logging.basicConfig(level=logging.DEBUG)
