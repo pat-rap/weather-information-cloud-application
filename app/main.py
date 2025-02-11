@@ -7,7 +7,7 @@ from typing import List, Optional
 import logging
 from urllib.parse import quote_plus, unquote_plus
 from .auth import get_current_user, set_auth_cookie, remove_auth_cookie, TokenData
-from .rss_reader import fetch_rss_feed, parse_rss_feed
+from . import rss_reader
 from .database import execute_sql, delete_old_entries
 from .config import PUBLISHING_OFFICE_MAPPING, REGIONS, PREFECTURES
 
@@ -109,120 +109,46 @@ async def read_rss(feed_type: str, request: Request, region:  Optional[str] = Qu
     }
 
     if feed_type not in feed_info:
-        return {"error": "Invalid feed type"}
+        raise HTTPException(status_code=400, detail="Invalid feed type") # エラーレスポンスを返す
 
     url = feed_info[feed_type]["url"]
     category = feed_info[feed_type]["category"]
-    response = fetch_rss_feed(url, last_modified_times[feed_type])
-    # --- RSS フィードが取得できなかった場合 (更新がない、またはエラー) ---
-    if response is None:
-        query = "SELECT * FROM feed_entries"
-        params = []
+    frequency_type = feed_info[feed_type]["frequency_type"]
 
-        if region:
-            prefectures_in_region = REGIONS.get(region, [])
-            if prefectures_in_region:
-                placeholders = ', '.join(['%s'] * len(prefectures_in_region))
-                query += f" WHERE prefecture IN ({placeholders})"
-                params.extend(prefectures_in_region)
-            else:
-                raise HTTPException(status_code=404, detail=f"No data found for region: {region}")
+    # まずは前回のlast_modifiedを使ってデータ取得を試みる
+    feed_id = rss_reader.get_feed_data(feed_type, url, category, frequency_type, last_modified_times.get(feed_type))
 
-        if prefecture:
-            if "WHERE" in query:
-                query += " AND prefecture = %s"
-            else:
-                query += " WHERE prefecture = %s"
-            params.append(prefecture)
+    if feed_id is None:  # 更新がない場合
+        logger.info(f"No update for feed type: {feed_type}, retrieving from DB")
+        # feed_metaテーブルからfeed_idを取得
+        feed_meta = execute_sql("SELECT id FROM feed_meta WHERE feed_url = %s", (url,), fetchone=True)
+        if feed_meta:
+            feed_id = feed_meta['id']
+        else:  # feed_metaにもデータがない場合
+            logger.info(f"No feed meta data for feed type: {feed_type}, fetching new data")
+            feed_id = rss_reader.get_feed_data(feed_type, url, category, frequency_type) # last_modifiedをNoneとして再度get_feed_dataを呼び出す
 
-        query += f" AND feed_id = (SELECT id FROM feed_meta WHERE feed_url = '{url}')" # feed_idでフィルタリング
-        query += " ORDER BY entry_updated DESC LIMIT 10"
-        filtered_entries = execute_sql(query, tuple(params), fetchall=True)
+    # 共通のDBからの取得処理（feed_idがNoneでなければ実行）
+    if feed_id:
+      filtered_entries = rss_reader.get_filtered_entries(feed_id, region, prefecture)
 
-        context = {
-            "request": request,
-            "feed_title": category,
-            "entries": filtered_entries,
-            "username": current_user.username if current_user else None,
-        }
-        return templates.TemplateResponse("feed_data.html", context)
+      # last_modified_times の更新
+      if feed_type in last_modified_times:
+          response = rss_reader.fetch_rss_feed(url)
+          if response:
+            last_modified_str = response.headers.get('Last-Modified')
+            if last_modified_str:
+                last_modified_times[feed_type] = datetime.strptime(last_modified_str, '%a, %d %b %Y %H:%M:%S %Z')
+    else:
+      filtered_entries = [] # feed_idがない場合は空のリスト
 
-    # --- RSS フィードが取得できた場合 ---
-    if response:
-        entries, feed_title, feed_subtitle, feed_updated, feed_id_in_atom, rights = parse_rss_feed(response)
-
-        # Last-Modified ヘッダーをパースして保存
-        last_modified_str = response.headers.get('Last-Modified')
-        if last_modified_str:
-            last_modified_times[feed_type] = datetime.strptime(last_modified_str, '%a, %d %b %Y %H:%M:%S %Z')
-
-        # データベース挿入処理
-        # 1. feed_meta テーブルへの挿入/更新 (INSERT ... ON CONFLICT)
-        feed_updated_dt = datetime.strptime(feed_updated, '%Y-%m-%dT%H:%M:%S%z') if feed_updated else None
-
-        feed_id = execute_sql("""
-            INSERT INTO feed_meta (feed_url, feed_title, feed_subtitle, feed_updated, feed_id_in_atom, rights, category, frequency_type, last_fetched)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (feed_url) DO UPDATE
-            SET feed_title = EXCLUDED.feed_title,
-                feed_subtitle = EXCLUDED.feed_subtitle,
-                feed_updated = EXCLUDED.feed_updated,
-                feed_id_in_atom = EXCLUDED.feed_id_in_atom,
-                rights = EXCLUDED.rights,
-                category = EXCLUDED.category,
-                frequency_type = EXCLUDED.frequency_type,
-                last_fetched = EXCLUDED.last_fetched
-            RETURNING id
-        """, (url, feed_title, feed_subtitle, feed_updated_dt, feed_id_in_atom, rights, category, feed_info[feed_type]["frequency_type"], datetime.now()), fetchone=True)['id']
-
-
-        # 2. feed_entries テーブルへの挿入 (都道府県ごとに分割)
-        for entry in entries:
-            try:
-                entry_updated_dt = datetime.strptime(entry['updated'], '%Y-%m-%dT%H:%M:%S%z') if entry['updated'] else None
-            except ValueError:
-                try:
-                    entry_updated_dt = datetime.strptime(entry['updated'], '%Y-%m-%dT%H:%M:%S') if entry['updated'] else None
-                except ValueError:
-                    entry_updated_dt = None
-
-            # 都道府県ごとにレコードを挿入
-            for prefecture_item in entry['prefectures']:
-                execute_sql("""
-                    INSERT INTO feed_entries (feed_id, entry_id_in_atom, entry_title, entry_updated, publishing_office, entry_link, entry_content, prefecture)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (feed_id, entry_id_in_atom, publishing_office) DO NOTHING
-                """, (feed_id, entry['id'], entry['title'], entry_updated_dt, entry['publishing_office'], entry['link'], entry['content'], prefecture_item))
-
-        # 3. フィルタリング (データベースから取得)
-        query = "SELECT * FROM feed_entries WHERE feed_id = %s"  # 最初に feed_id で絞り込む
-        params = [feed_id]
-
-        if region:
-            # regions辞書を使って、regionに対応するprefectureのリストを取得
-            prefectures_in_region = REGIONS.get(region, [])
-            if prefectures_in_region:
-                # SQLのIN句を使うためのプレースホルダー文字列を作成
-                placeholders = ', '.join(['%s'] * len(prefectures_in_region))
-                query += f" AND prefecture IN ({placeholders})"
-                params.extend(prefectures_in_region) # パラメータを追加
-            else: #regionに対応する都道府県がない場合
-                raise HTTPException(status_code=404, detail=f"No data found for region: {region}")
-
-        if prefecture:
-            query += " AND prefecture = %s"
-            params.append(prefecture)
-
-        query += " ORDER BY entry_updated DESC LIMIT 10" # 新しい順に取得
-        filtered_entries = execute_sql(query, tuple(params), fetchall=True)
-
-        context = {
-            "request": request,
-            "feed_title": feed_title,
-            "entries": filtered_entries,
-            "username": current_user.username if current_user else None,
-        }
-        return templates.TemplateResponse("feed_data.html", context)
+    context = {
+        "request": request,
+        "feed_title": category,  # または feed_title をDBから取得
+        "entries": filtered_entries,
+        "username": current_user.username if current_user else None,
+    }
+    return templates.TemplateResponse("feed_data.html", context)
 
 @app.get("/delete_old_entries")
 async def delete_old_entries_endpoint(background_tasks: BackgroundTasks):
