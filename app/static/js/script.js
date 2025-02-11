@@ -1,6 +1,7 @@
 async function updatePrefectures() {
     const regionSelect = document.getElementById('region');
     const prefectureSelect = document.getElementById('prefecture');
+    const feedTypeSelect = document.getElementById('feed_type');
     const selectedRegion = regionSelect.value;
 
     // 選択された地域が空の場合は、都道府県セレクトボックスをクリアして終了
@@ -25,6 +26,12 @@ async function updatePrefectures() {
     if (selectedPrefecture) {
         prefectureSelect.value = decodeURIComponent(selectedPrefecture); // デコード
     }
+
+    // クッキーに保存されている feed_type を選択状態にする (存在する場合)
+    const selectedFeedType = getCookie('selected_feed_type');
+    if (selectedFeedType) {
+        feedTypeSelect.value = selectedFeedType;
+    }
 }
 
 // クッキーから値を取得する関数
@@ -34,14 +41,119 @@ function getCookie(name) {
     if (parts.length === 2) return parts.pop().split(';').shift();
 }
 
-// ページ読み込み時に都道府県セレクトボックスを初期化
-document.addEventListener('DOMContentLoaded', () => {
-  updatePrefectures();
+// クッキーに値を設定する関数 (必要に応じてエスケープ処理を追加)
+function setCookie(name, value) {
+    document.cookie = `${name}=${encodeURIComponent(value)};path=/`;
+  }
 
-    // selected_feed_typeをクッキーから取得し、selectedにする
+  // ページ読み込み時の処理
+document.addEventListener('DOMContentLoaded', () => {
+    const regionSelect = document.getElementById('region');
     const feedTypeSelect = document.getElementById('feed_type');
+
+    // クッキーから selected_region を取得し、region セレクトボックスの値を設定
+    const selectedRegion = getCookie('selected_region');
+    if (selectedRegion) {
+        regionSelect.value = decodeURIComponent(selectedRegion);
+    }
+
+    // updatePrefectures は region が選択されている場合のみ実行
+    if (selectedRegion) {
+        updatePrefectures();
+    }
+
+    // selected_feed_type をクッキーから取得し、該当する項目を選択状態にする
     const selectedFeedType = getCookie('selected_feed_type');
     if (selectedFeedType) {
         feedTypeSelect.value = selectedFeedType;
+    } else {
+        // クッキーに feed_type がない場合の初期値を設定
+        feedTypeSelect.value = "extra";
+        setCookie('selected_feed_type', 'extra');
+    }
+
+    updatePrefectures();
+
+    // フォーム送信時のイベントハンドラーを追加
+    const form = document.querySelector('form');
+    if (form) {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const formData = new FormData(form);
+            const region = formData.get('region');
+            const prefecture = formData.get('prefecture');
+            const feedType = formData.get('feed_type');
+
+            // クッキーに選択値を保存
+            setCookie('selected_region', region);
+            setCookie('selected_prefecture', prefecture);
+            setCookie('selected_feed_type', feedType);
+
+            const encodedRegion = encodeURIComponent(region);
+            const encodedPrefecture = encodeURIComponent(prefecture);
+
+            // 非同期でRSSフィードのHTMLを取得し、div#feed-data に表示
+            const rssUrl = `/rss/${feedType}?region=${encodedRegion}&prefecture=${encodedPrefecture}`;
+            try {
+                const response = await fetch(rssUrl, {
+                    credentials: 'same-origin'
+                });
+                if (response.ok) {
+                    const htmlContent = await response.text();
+                    document.getElementById('feed-data').innerHTML = htmlContent;
+                } else {
+                    document.getElementById('feed-data').innerHTML = `<p>フィードの取得に失敗しました。</p>`;
+                }
+            } catch (error) {
+                console.error(error);
+                document.getElementById('feed-data').innerHTML = `<p>エラーが発生しました。</p>`;
+            }
+        });
+    }
+
+    // ★★★ ページ読み込み時にフィードデータを取得して表示 ★★★
+    async function loadFeedData() {
+        let region = getCookie('selected_region');
+        let prefecture = getCookie('selected_prefecture');
+        const feedType = getCookie('selected_feed_type') || 'extra'; // デフォルト値
+
+        // URLパラメータをチェックし、クッキーよりも優先する
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlRegion = urlParams.get('region');
+        const urlPrefecture = urlParams.get('prefecture');
+
+        if (urlRegion) {
+          region = urlRegion;
+        }
+        if (urlPrefecture) {
+          prefecture = urlPrefecture
+        }
+
+        if (region && prefecture) {
+            const encodedRegion = encodeURIComponent(region);
+            const encodedPrefecture = encodeURIComponent(prefecture);
+            const rssUrl = `/rss/${feedType}?region=${encodedRegion}&prefecture=${encodedPrefecture}`;
+            console.log(rssUrl)
+            try {
+                const response = await fetch(rssUrl, { credentials: 'same-origin' });
+                if (response.ok) {
+                    const htmlContent = await response.text();
+                    document.getElementById('feed-data').innerHTML = htmlContent;
+                } else {
+                    document.getElementById('feed-data').innerHTML = `<p>フィードの取得に失敗しました。</p>`;
+                }
+            } catch (error) {
+                console.error(error);
+                document.getElementById('feed-data').innerHTML = `<p>エラーが発生しました。</p>`;
+            }
+        }
+    }
+
+    loadFeedData(); // ページロード時に実行
+
+    // region が変更されたら、prefectureSelectを更新
+    if (regionSelect) {
+        regionSelect.addEventListener('change', updatePrefectures);
     }
 });

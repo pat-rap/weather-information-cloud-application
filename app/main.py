@@ -34,22 +34,31 @@ last_modified_times = {
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request,
                current_user: TokenData = Depends(get_current_user),
-               selected_region: Optional[str] = Cookie(None), #Cookieから取得
-               selected_prefecture: Optional[str] = Cookie(None), #Cookieから取得
-               selected_feed_type: Optional[str] = Cookie("extra") #Cookieから取得
-               ):
+               region: Optional[str] = Query(None),
+               prefecture: Optional[str] = Query(None),
+               feed_type: Optional[str] = Query(None)):
     """
     トップページを表示。
     ログイン状態に応じて、認証開始ボタンまたは項目表示ページへのリンクを表示。
     """
+    # Cookieからの取得処理（後でクエリパラメータが優先されるようにする）
+    selected_region = request.cookies.get("selected_region")
+    selected_prefecture = request.cookies.get("selected_prefecture")
+    selected_feed_type = request.cookies.get("selected_feed_type") or "extra"
+
+    # クエリパラメータを優先
+    context_region = region if region is not None else selected_region
+    context_prefecture = prefecture if prefecture is not None else selected_prefecture
+    context_feed_type = feed_type if feed_type is not None else selected_feed_type
+
     context = {
         "request": request,
         "regions": REGIONS,
         "prefectures": PREFECTURES,
-        "selected_region": selected_region,
-        "selected_prefecture": selected_prefecture,
-        "selected_feed_type": selected_feed_type, # 追加
-        "username": current_user.username if current_user else None, # ユーザー名
+        "selected_region": context_region,
+        "selected_prefecture": context_prefecture,
+        "selected_feed_type": context_feed_type,
+        "username": current_user.username if current_user else None,
     }
     return templates.TemplateResponse("index.html", context)
 
@@ -71,23 +80,6 @@ async def logout(response: Response):
     redirect_resp = RedirectResponse("/", status_code=302)
     remove_auth_cookie(redirect_resp)
     return redirect_resp
-
-@app.post("/select_location")
-async def select_location(response: Response, region: str = Form(...), prefecture: str = Form(...), feed_type: str = Form(...)):
-    """
-    選択された地域と都道府県をクッキーに保存し、/rss/{feed_type} にリダイレクト。
-    """
-    # URLエンコード (日本語などのマルチバイト文字を安全に扱うため)
-    encoded_region = quote_plus(region)
-    encoded_prefecture = quote_plus(prefecture)
-
-    response.set_cookie(key="selected_region", value=encoded_region)
-    response.set_cookie(key="selected_prefecture", value=encoded_prefecture)
-    response.set_cookie(key="selected_feed_type", value=feed_type)  # feed_type を保存
-
-    # リダイレクトURLにクエリパラメータを追加
-    redirect_url = f"/rss/{feed_type}?region={encoded_region}&prefecture={encoded_prefecture}"
-    return RedirectResponse(redirect_url, status_code=302)
 
 @app.get("/rss/{feed_type}")
 async def read_rss(feed_type: str, request: Request, region:  Optional[str] = Query(None), prefecture: Optional[str] = Query(None), current_user: TokenData = Depends(get_current_user)):

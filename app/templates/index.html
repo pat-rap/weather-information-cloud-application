@@ -13,7 +13,7 @@
         <p>ようこそ、{{ username }}さん</p>
         <a href="/logout">ログアウト</a>
 
-        <form action="/select_location" method="post">
+        <form>
             <div>
                 <label for="region">地域:</label>
                 <select id="region" name="region" onchange="updatePrefectures()">
@@ -38,10 +38,10 @@
             <div>
                 <label for="feed_type">データの種類:</label>
                 <select id="feed_type" name="feed_type">
-                    <option value="extra">警報・注意報</option>
-                    <option value="eqvol">地震・火山</option>
-                    <option value="other">その他</option>
-                    {# <option value="regular">天気概況</option>  コメントアウト #}
+                    <option value="extra" {% if selected_feed_type == "extra" %}selected{% endif %}>警報・注意報</option>
+                    <option value="eqvol" {% if selected_feed_type == "eqvol" %}selected{% endif %}>地震・火山</option>
+                    <option value="other" {% if selected_feed_type == "other" %}selected{% endif %}>その他</option>
+                    {# <option value="regular" {% if selected_feed_type == "regular" %}selected{% endif %}>天気概況</option>  コメントアウト #}
                 </select>
             </div>
             <button type="submit">表示</button>
