@@ -9,6 +9,13 @@
 <body>
     <h1>気象情報</h1>
 
+    <!-- UI コントロール追加 -->
+    <div id="ui-controls">
+        <button type="button" id="font-decrease">小さく</button>
+        <button type="button" id="font-increase">大きく</button>
+        <button type="button" id="theme-toggle">テーマ切替</button>
+    </div>
+
     {% if username %}
         <p>ようこそ、{{ username }}さん</p>
         <a href="/logout">ログアウト</a>

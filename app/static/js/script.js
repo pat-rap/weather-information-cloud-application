@@ -71,8 +71,28 @@ document.addEventListener('DOMContentLoaded', () => {
         feedTypeSelect.value = "extra";
         setCookie('selected_feed_type', 'extra');
     }
-
     updatePrefectures();
+
+    // 文字サイズ変更
+    const fontIncreaseBtn = document.getElementById('font-increase');
+    const fontDecreaseBtn = document.getElementById('font-decrease');
+    let currentFontSize = parseFloat(window.getComputedStyle(document.body).fontSize) || 16;
+    
+    fontIncreaseBtn.addEventListener('click', () => {
+        currentFontSize = Math.min(currentFontSize + 2, 36);
+        document.body.style.fontSize = currentFontSize + 'px';
+    });
+    
+    fontDecreaseBtn.addEventListener('click', () => {
+        currentFontSize = Math.max(currentFontSize - 2, 10);
+        document.body.style.fontSize = currentFontSize + 'px';
+    });
+    
+    // テーマ切替
+    const themeToggleBtn = document.getElementById('theme-toggle');
+    themeToggleBtn.addEventListener('click', () => {
+        document.body.classList.toggle('dark-mode');
+    });
 
     // フォーム送信時のイベントハンドラーを追加
     const form = document.querySelector('form');
