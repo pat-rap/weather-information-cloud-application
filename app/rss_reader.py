@@ -1,7 +1,7 @@
 import requests
 from bs4 import BeautifulSoup
 from typing import List, Dict, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from .config import PREFECTURES, get_prefecture_from_kishodai, REGIONS
 from .database import execute_sql
 
@@ -195,6 +195,122 @@ def get_filtered_entries(feed_id: int, region: Optional[str] = None, prefecture:
             params.extend(prefectures_in_region)
         else:
             return []
+
+    if prefecture:
+        query += " AND prefecture = %s"
+        params.append(prefecture)
+
+    query += " ORDER BY entry_updated DESC LIMIT 10"
+    filtered_entries = execute_sql(query, tuple(params), fetchall=True)
+    return filtered_entries
+
+def should_throttle(url: str, interval: int) -> bool:
+    """指定されたURLに対するリクエストをスロットリングすべきかどうかを判定する"""
+    last_fetched = execute_sql("SELECT last_fetched FROM feed_meta WHERE feed_url = %s", (url,), fetchone=True)
+
+    if last_fetched and last_fetched['last_fetched']:
+        time_since_last_fetch = datetime.now(timezone.utc) - last_fetched['last_fetched']
+        return time_since_last_fetch.total_seconds() < interval
+    else:
+        return False  # 初回取得時はスロットリングしない
+
+def get_filtered_entries_from_db(feed_url: str, region: Optional[str] = None, prefecture: Optional[str] = None) -> List[Dict]:
+    """DBから指定条件でエントリをフィルタリング(feed_url使用)"""
+
+    # feed_metaテーブルからfeed_idを取得
+    feed_meta = execute_sql("SELECT id FROM feed_meta WHERE feed_url = %s", (feed_url,), fetchone=True)
+    if not feed_meta:
+        return []  # 該当するフィードがない場合は空のリストを返す
+    feed_id = feed_meta['id']
+
+    query = "SELECT * FROM feed_entries WHERE feed_id = %s"
+    params = [feed_id]
+
+    if region:
+        prefectures_in_region = REGIONS.get(region, [])
+        if prefectures_in_region:
+            placeholders = ', '.join(['%s'] * len(prefectures_in_region))
+            query += f" AND prefecture IN ({placeholders})"
+            params.extend(prefectures_in_region)
+        else:
+            return []
+
+    if prefecture:
+        query += " AND prefecture = %s"
+        params.append(prefecture)
+
+    query += " ORDER BY entry_updated DESC LIMIT 10"
+    filtered_entries = execute_sql(query, tuple(params), fetchall=True)
+    return filtered_entries
+
+def insert_or_update_feed_data(parsed_feed_data, feed_type, url, category, frequency_type):
+    """パースされたフィードデータとその他の情報を受け取り、DBに挿入/更新する"""
+    entries, feed_title, feed_subtitle, feed_updated, feed_id_in_atom, rights = parsed_feed_data
+
+    # データベース挿入処理
+    # 1. feed_meta テーブルへの挿入/更新 (INSERT ... ON CONFLICT)
+    feed_updated_dt = datetime.strptime(feed_updated, '%Y-%m-%dT%H:%M:%S%z') if feed_updated else None
+
+    feed_id = execute_sql("""
+        INSERT INTO feed_meta (feed_url, feed_title, feed_subtitle, feed_updated, feed_id_in_atom, rights, category, frequency_type, last_fetched)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (feed_url) DO UPDATE
+        SET feed_title = EXCLUDED.feed_title,
+            feed_subtitle = EXCLUDED.feed_subtitle,
+            feed_updated = EXCLUDED.feed_updated,
+            feed_id_in_atom = EXCLUDED.feed_id_in_atom,
+            rights = EXCLUDED.rights,
+            category = EXCLUDED.category,
+            frequency_type = EXCLUDED.frequency_type,
+            last_fetched = EXCLUDED.last_fetched
+        RETURNING id
+    """, (url, feed_title, feed_subtitle, feed_updated_dt, feed_id_in_atom, rights, category, frequency_type, datetime.now()), fetchone=True)['id']
+
+    # 2. feed_entries テーブルへの挿入 (都道府県ごとに分割)
+    for entry in entries:
+        try:
+            entry_updated_dt = datetime.strptime(entry['updated'], '%Y-%m-%dT%H:%M:%S%z') if entry['updated'] else None
+        except ValueError:
+            try:
+                entry_updated_dt = datetime.strptime(entry['updated'], '%Y-%m-%dT%H:%M:%S') if entry['updated'] else None
+            except ValueError:
+                entry_updated_dt = None
+
+        # 都道府県ごとにレコードを挿入
+        for prefecture_item in entry['prefectures']:
+            execute_sql("""
+                INSERT INTO feed_entries (feed_id, entry_id_in_atom, entry_title, entry_updated, publishing_office, entry_link, entry_content, prefecture)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (feed_id, entry_id_in_atom, publishing_office) DO NOTHING
+            """, (feed_id, entry['id'], entry['title'], entry_updated_dt, entry['publishing_office'], entry['link'], entry['content'], prefecture_item))
+
+    return feed_id
+
+
+def get_feed_data(feed_type: str, url: str, category: str, frequency_type: str, last_modified: Optional[datetime] = None) -> Optional[int]:
+    """RSSフィードを取得、パース、DB保存し、feed_idを返す"""
+    response = fetch_rss_feed(url, last_modified)
+    if response is None:
+        return None
+
+    parsed_feed_data = parse_rss_feed(response) #パース結果をタプルで受け取る
+    feed_id = insert_or_update_feed_data(parsed_feed_data, feed_type, url, category, frequency_type) #パース結果を渡す
+
+    return feed_id
+
+def get_filtered_entries(feed_id: int, region: Optional[str] = None, prefecture: Optional[str] = None) -> List[Dict]:
+    """DBから指定条件でエントリをフィルタリング"""
+    query = "SELECT * FROM feed_entries WHERE feed_id = %s"
+    params = [feed_id]
+
+    if region:
+        prefectures_in_region = REGIONS.get(region, [])
+        if prefectures_in_region:
+            placeholders = ', '.join(['%s'] * len(prefectures_in_region))
+            query += f" AND prefecture IN ({placeholders})"
+            params.extend(prefectures_in_region)
+        else:
+            return [] #regionに該当する都道府県がない場合
 
     if prefecture:
         query += " AND prefecture = %s"

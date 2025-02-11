@@ -2,8 +2,8 @@ from fastapi import FastAPI, Depends, Response, Request, BackgroundTasks, Query,
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from datetime import datetime
-from typing import Optional
+from datetime import datetime, timedelta
+from typing import List, Optional
 import logging
 from urllib.parse import unquote_plus
 from .auth import get_current_user, set_auth_cookie, remove_auth_cookie, TokenData
@@ -29,6 +29,14 @@ last_modified_times = {
     "extra": None,
     "eqvol": None,
     "other": None
+}
+
+# スロットリング間隔 (例: 高頻度フィードは1分、それ以外は10分)
+THROTTLE_INTERVALS = {
+    "extra": 60,
+    "eqvol": 60,
+    "other": 60,
+    #"regular": 60,  # regular は一旦コメントアウト
 }
 
 @app.get("/", response_class=HTMLResponse)
@@ -115,40 +123,58 @@ async def read_rss(feed_type: str, request: Request, region:  Optional[str] = Qu
     category = feed_info[feed_type]["category"]
     frequency_type = feed_info[feed_type]["frequency_type"]
 
-    # まずは前回のlast_modifiedを使ってデータ取得を試みる
-    feed_id = rss_reader.get_feed_data(feed_type, url, category, frequency_type, last_modified_times.get(feed_type))
+    # スロットリング処理
+    if rss_reader.should_throttle(url, THROTTLE_INTERVALS.get(feed_type, 60)):
+        logger.info(f"Throttling request for feed type: {feed_type}, url: {url}")
+        # DBからデータ取得: rss_reader の関数を呼び出す
+        filtered_entries = rss_reader.get_filtered_entries_from_db(url, region, prefecture)
+        context = {
+            "request": request,
+            "feed_title": category,
+            "entries": filtered_entries,
+            "username": current_user.username if current_user else None,
+        }
+        return templates.TemplateResponse("feed_data.html", context)
 
-    if feed_id is None:  # 更新がない場合
+    # RSSフィード取得
+    response = rss_reader.fetch_rss_feed(url, last_modified_times.get(feed_type))
+
+    # --- RSS フィードが取得できなかった場合 (更新がない、またはエラー) ---
+    if response is None:
         logger.info(f"No update for feed type: {feed_type}, retrieving from DB")
-        # feed_metaテーブルからfeed_idを取得
-        feed_meta = execute_sql("SELECT id FROM feed_meta WHERE feed_url = %s", (url,), fetchone=True)
-        if feed_meta:
-            feed_id = feed_meta['id']
-        else:  # feed_metaにもデータがない場合
-            logger.info(f"No feed meta data for feed type: {feed_type}, fetching new data")
-            feed_id = rss_reader.get_feed_data(feed_type, url, category, frequency_type) # last_modifiedをNoneとして再度get_feed_dataを呼び出す
+        # DBからデータ取得: rss_reader の関数を呼び出す
+        filtered_entries = rss_reader.get_filtered_entries_from_db(url, region, prefecture)
+        context = {
+            "request": request,
+            "feed_title": category,
+            "entries": filtered_entries,
+            "username": current_user.username if current_user else None,
+        }
+        return templates.TemplateResponse("feed_data.html", context)
 
-    # 共通のDBからの取得処理（feed_idがNoneでなければ実行）
-    if feed_id:
-      filtered_entries = rss_reader.get_filtered_entries(feed_id, region, prefecture)
+    # --- RSS フィードが取得できた場合 ---
+    if response:
+        # パース処理
+        parsed_feed_data = rss_reader.parse_rss_feed(response)
 
-      # last_modified_times の更新
-      if feed_type in last_modified_times:
-          response = rss_reader.fetch_rss_feed(url)
-          if response:
-            last_modified_str = response.headers.get('Last-Modified')
-            if last_modified_str:
-                last_modified_times[feed_type] = datetime.strptime(last_modified_str, '%a, %d %b %Y %H:%M:%S %Z')
-    else:
-      filtered_entries = [] # feed_idがない場合は空のリスト
+        # Last-Modified ヘッダーをパースして保存
+        last_modified_str = response.headers.get('Last-Modified')
+        if last_modified_str:
+            last_modified_times[feed_type] = datetime.strptime(last_modified_str, '%a, %d %b %Y %H:%M:%S %Z')
 
-    context = {
-        "request": request,
-        "feed_title": category,  # または feed_title をDBから取得
-        "entries": filtered_entries,
-        "username": current_user.username if current_user else None,
-    }
-    return templates.TemplateResponse("feed_data.html", context)
+        # データベース挿入/更新処理: rss_reader の関数を呼び出す
+        feed_id = rss_reader.insert_or_update_feed_data(parsed_feed_data, feed_type, url, category, frequency_type)
+
+        # 3. フィルタリング (データベースから取得): rss_reader の関数を使う
+        filtered_entries = rss_reader.get_filtered_entries(feed_id, region, prefecture)
+
+        context = {
+            "request": request,
+            "feed_title": parsed_feed_data[1],  # feed_title
+            "entries": filtered_entries,
+            "username": current_user.username if current_user else None,
+        }
+        return templates.TemplateResponse("feed_data.html", context)
 
 @app.get("/delete_old_entries")
 async def delete_old_entries_endpoint(background_tasks: BackgroundTasks):
