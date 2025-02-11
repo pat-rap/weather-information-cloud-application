@@ -1,24 +1,40 @@
 import requests
 from bs4 import BeautifulSoup
 from typing import List, Dict, Optional
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from .config import PREFECTURES, get_prefecture_from_kishodai, REGIONS
 from .database import execute_sql
-
 import logging
+
 # ルートロガーの設定
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-# グローバル変数として、ダウンロード量を追跡 (簡易的な実装)
-downloaded_bytes = 0
+# ダウンロード制限値（10GB）
 DOWNLOAD_LIMIT = 10 * 1024 * 1024 * 1024  # 10GB
+# 現在の消費量（グローバルで管理。実際は永続ストレージやRedisなどの外部キャッシュにするのが望ましい）
+downloaded_bytes = 0
+# 最後にバケットをリセットした時刻。毎日リセットできる仕組みを別途実装する
+bucket_reset_time = datetime.now(timezone.utc)
 
+def reset_bucket_if_needed():
+    global downloaded_bytes, bucket_reset_time
+    now = datetime.now(timezone.utc)
+    # 例として、毎日0時にリセットするとする。ここでは簡易的に24時間経過したか判断
+    if now - bucket_reset_time >= timedelta(days=1):
+        downloaded_bytes = 0
+        bucket_reset_time = now
+        logger.info("Download bucket reset.")
+
+def can_download(additional: int) -> bool:
+    reset_bucket_if_needed()
+    return (downloaded_bytes + additional) <= DOWNLOAD_LIMIT
 
 def fetch_rss_feed(url: str, last_modified: Optional[datetime] = None) -> Optional[requests.Response]:
     """
     指定されたURLからRSSフィードを取得する。
     If-Modified-Since ヘッダーを活用し、更新がない場合は None を返す。
+    また、漏れバケツアルゴリズムを用いて1日10GBの制限を超えないようにする。
     """
     global downloaded_bytes
     headers = {}
@@ -26,16 +42,26 @@ def fetch_rss_feed(url: str, last_modified: Optional[datetime] = None) -> Option
         headers['If-Modified-Since'] = last_modified.strftime('%a, %d %b %Y %H:%M:%S GMT')
 
     try:
+        # まず、試しにヘッドリクエストでContent-Lengthを見て
+        head_response = requests.head(url, headers=headers, timeout=10)
+        content_length = int(head_response.headers.get('Content-Length', 0))
+        if not can_download(content_length):
+            logger.error("Download limit exceeded. Skipping request.")
+            return None
+
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
-
         if response.status_code == 304:
             return None
 
-        # ダウンロード量の加算 (厳密な計算ではない)
-        downloaded_bytes += len(response.content)
-        logger.info(f"Downloaded: {len(response.content)} bytes, Total: {downloaded_bytes} bytes")
+        # レスポンスのバイトサイズを確認し、ダウンロード可能か再チェック
+        response_size = len(response.content)
+        if not can_download(response_size):
+            logger.error("Download limit exceeded after fetching response. Discarding response.")
+            return None
 
+        downloaded_bytes += response_size
+        logger.info(f"Downloaded: {response_size} bytes, Total: {downloaded_bytes} bytes")
         return response
 
     except requests.exceptions.RequestException as e:
