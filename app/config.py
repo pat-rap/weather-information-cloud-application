@@ -1,5 +1,29 @@
 # config.py (新規作成)
 
+from datetime import datetime
+
+LAST_MODIFIED_TIMES = {
+    "regular": None,
+    "extra": None,
+    "eqvol": None,
+    "other": None,
+}
+
+THROTTLE_INTERVALS = {
+    "extra": 60,
+    "eqvol": 60,
+    "other": 60,
+    # "regular": 60,
+}
+
+# フィード情報もこちらに移動
+FEED_INFO = {
+    # "regular": {"url": "https://www.data.jma.go.jp/developer/xml/feed/regular.xml", "category": "天気概況", "frequency_type": "高頻度"},
+    "extra": {"url": "https://www.data.jma.go.jp/developer/xml/feed/extra.xml", "category": "警報・注意報", "frequency_type": "高頻度"},
+    "eqvol": {"url": "https://www.data.jma.go.jp/developer/xml/feed/eqvol.xml", "category": "地震・火山", "frequency_type": "高頻度"},
+    "other": {"url": "https://www.data.jma.go.jp/developer/xml/feed/other.xml", "category": "その他", "frequency_type": "高頻度"},
+}
+
 PUBLISHING_OFFICE_MAPPING = {
     # 北海道
     "稚内地方気象台": ["宗谷地方"],

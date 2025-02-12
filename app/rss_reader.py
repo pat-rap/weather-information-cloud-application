@@ -2,7 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 from typing import List, Dict, Optional
 from datetime import datetime, timezone, timedelta
-from .config import PREFECTURES, get_prefecture_from_kishodai, REGIONS
+from .config import PREFECTURES, get_prefecture_from_kishodai, REGIONS, LAST_MODIFIED_TIMES, THROTTLE_INTERVALS
 from .database import execute_sql
 import logging
 
@@ -345,3 +345,28 @@ def get_filtered_entries(feed_id: int, region: Optional[str] = None, prefecture:
     query += " ORDER BY entry_updated DESC LIMIT 10"
     filtered_entries = execute_sql(query, tuple(params), fetchall=True)
     return filtered_entries
+
+def fetch_and_store_feed_data(feed_type: str, url: str, category: str, frequency_type: str):
+    """
+    指定されたフィードを取得し、DBに保存する。
+    スロットリングも考慮する。
+    """
+    if should_throttle(url, THROTTLE_INTERVALS.get(feed_type, 60)):
+        logger.info(f"Throttling request for feed type: {feed_type}, url: {url}")
+        return
+
+    response = fetch_rss_feed(url, LAST_MODIFIED_TIMES.get(feed_type))
+
+    if response is None:
+        logger.info(f"No update for feed type: {feed_type}")
+        return
+
+    parsed_feed_data = parse_rss_feed(response)
+
+    last_modified_str = response.headers.get('Last-Modified')
+    if last_modified_str:
+        LAST_MODIFIED_TIMES[feed_type] = datetime.strptime(last_modified_str, '%a, %d %b %Y %H:%M:%S %Z')
+
+    insert_or_update_feed_data(parsed_feed_data, feed_type, url, category, frequency_type)
+    logger.info(f"Successfully fetched and stored data for feed type: {feed_type}")
+
