@@ -1,27 +1,22 @@
-from fastapi import FastAPI, Depends, Response, Request, BackgroundTasks, Query, HTTPException
+from fastapi import FastAPI, Depends, Response, Request, BackgroundTasks, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from datetime import datetime
 from typing import Optional
-from urllib.parse import unquote_plus
 import asyncio
 from .auth import get_current_user, set_auth_cookie, remove_auth_cookie, TokenData
 from . import rss_reader
 from .database import delete_old_entries
-from .config import REGIONS, PREFECTURES, LAST_MODIFIED_TIMES, THROTTLE_INTERVALS, FEED_INFO
+from .config import REGIONS, PREFECTURES, FEED_INFO
 import logging
 
 # ルートロガーの設定
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
-# staticフォルダを静的ファイルとしてマウント
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
-
-# templatesフォルダを指定
 templates = Jinja2Templates(directory="app/templates")
 
 @app.get("/", response_class=HTMLResponse)
@@ -44,6 +39,17 @@ async def root(request: Request,
     context_prefecture = prefecture if prefecture is not None else selected_prefecture
     context_feed_type = feed_type if feed_type is not None else selected_feed_type
 
+    # データベースからデータを取得 (選択された feed_type, region, prefecture に基づいてフィルタリング)
+    if context_feed_type not in FEED_INFO:
+        # 不正な feed_type が指定された場合は、空のリストを渡す
+        entries = []
+        feed_title = ""
+    else:
+        entries = rss_reader.get_filtered_entries_from_db(
+            FEED_INFO[context_feed_type]["url"], context_region, context_prefecture
+        )
+        feed_title = FEED_INFO[context_feed_type]["category"]
+
     context = {
         "request": request,
         "regions": REGIONS,
@@ -52,6 +58,8 @@ async def root(request: Request,
         "selected_prefecture": context_prefecture,
         "selected_feed_type": context_feed_type,
         "username": current_user.username if current_user else None,
+        "entries": entries,
+        "feed_title": feed_title,
     }
     return templates.TemplateResponse("index.html", context)
 
@@ -74,85 +82,8 @@ async def logout(response: Response):
     remove_auth_cookie(redirect_resp)
     return redirect_resp
 
-@app.get("/rss/{feed_type}")
-async def read_rss(feed_type: str, request: Request, region:  Optional[str] = Query(None), prefecture: Optional[str] = Query(None), current_user: TokenData = Depends(get_current_user)):
-    # クッキーから値を取得
-    selected_region = request.cookies.get("selected_region")
-    selected_prefecture = request.cookies.get("selected_prefecture")
-    # URLデコード
-    if selected_region:
-        selected_region = unquote_plus(selected_region)
-    if selected_prefecture:
-        selected_prefecture = unquote_plus(selected_prefecture)
-
-    # region, prefecture が Query Parameter で指定されていない場合、クッキーの値を使う
-    if region is None:
-        region = selected_region
-    if prefecture is None:
-        prefecture = selected_prefecture
-
-    if feed_type not in FEED_INFO:
-        raise HTTPException(status_code=400, detail="Invalid feed type") # エラーレスポンスを返す
-
-    url = FEED_INFO[feed_type]["url"]
-    category = FEED_INFO[feed_type]["category"]
-    frequency_type = FEED_INFO[feed_type]["frequency_type"]
-
-    # スロットリング処理
-    if rss_reader.should_throttle(url, THROTTLE_INTERVALS.get(feed_type, 60)):
-        logger.info(f"Throttling request for feed type: {feed_type}, url: {url}")
-        # DBからデータ取得: rss_reader の関数を呼び出す
-        filtered_entries = rss_reader.get_filtered_entries_from_db(url, region, prefecture)
-        context = {
-            "request": request,
-            "feed_title": category,
-            "entries": filtered_entries,
-            "username": current_user.username if current_user else None,
-        }
-        return templates.TemplateResponse("feed_data.html", context)
-
-    # RSSフィード取得
-    response = rss_reader.fetch_rss_feed(url, LAST_MODIFIED_TIMES.get(feed_type))
-
-    # --- RSS フィードが取得できなかった場合 (更新がない、またはエラー) ---
-    if response is None:
-        logger.info(f"No update for feed type: {feed_type}, retrieving from DB")
-        # DBからデータ取得: rss_reader の関数を呼び出す
-        filtered_entries = rss_reader.get_filtered_entries_from_db(url, region, prefecture)
-        context = {
-            "request": request,
-            "feed_title": category,
-            "entries": filtered_entries,
-            "username": current_user.username if current_user else None,
-        }
-        return templates.TemplateResponse("feed_data.html", context)
-
-    # --- RSS フィードが取得できた場合 ---
-    if response:
-        # パース処理
-        parsed_feed_data = rss_reader.parse_rss_feed(response)
-
-        # Last-Modified ヘッダーをパースして保存
-        last_modified_str = response.headers.get('Last-Modified')
-        if last_modified_str:
-            LAST_MODIFIED_TIMES[feed_type] = datetime.strptime(last_modified_str, '%a, %d %b %Y %H:%M:%S %Z')
-
-        # データベース挿入/更新処理: rss_reader の関数を呼び出す
-        feed_id = rss_reader.insert_or_update_feed_data(parsed_feed_data, feed_type, url, category, frequency_type)
-
-        # 3. フィルタリング (データベースから取得): rss_reader の関数を使う
-        filtered_entries = rss_reader.get_filtered_entries(feed_id, region, prefecture)
-
-        context = {
-            "request": request,
-            "feed_title": parsed_feed_data[1],  # feed_title
-            "entries": filtered_entries,
-            "username": current_user.username if current_user else None,
-        }
-        return templates.TemplateResponse("feed_data.html", context)
-
 @app.get("/get_prefectures")
-async def get_prefectures(region: str = Query(...)):
+async def get_prefectures(region: str = Query(...)) -> list[str]:
     """
     指定された地域に対応する都道府県のリストを返す。
     """
