@@ -106,7 +106,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // フォーム送信時のイベントハンドラー
     const form = document.querySelector('form');
     if (form) {
-        form.addEventListener('submit', async (e) => {
+        form.addEventListener('submit', (e) => {
             e.preventDefault();
 
             const formData = new FormData(form);
@@ -118,57 +118,13 @@ document.addEventListener('DOMContentLoaded', () => {
             setCookie('selected_prefecture', prefecture);
             setCookie('selected_feed_type', feedType);
 
-            const encodedRegion = encodeURIComponent(region);
-            const encodedPrefecture = encodeURIComponent(prefecture);
-            const rssUrl = `/rss/${feedType}?region=${encodedRegion}&prefecture=${encodedPrefecture}`;
-
-            try {
-                const response = await fetch(rssUrl, { credentials: 'same-origin' });
-                if (response.ok) {
-                    document.getElementById('feed-data').innerHTML = await response.text();
-                } else {
-                    document.getElementById('feed-data').innerHTML = `<p>フィードの取得に失敗しました。</p>`;
-                }
-            } catch (error) {
-                console.error(error);
-                document.getElementById('feed-data').innerHTML = `<p>エラーが発生しました。</p>`;
-            }
+            // ページをリロードする (FastAPI 側でデータ取得と表示を行う)
+            form.submit();
         });
     }
 
-    // ページ読み込み時にフィードデータを取得して表示
+    // ページ読み込み時にフィードデータを取得して表示する処理を削除
     if (regionSelect) {
-        async function loadFeedData() {
-            let region = getCookie('selected_region');
-            let prefecture = getCookie('selected_prefecture');
-            const feedType = getCookie('selected_feed_type') || 'extra';
-    
-            const urlParams = new URLSearchParams(window.location.search);
-            const urlRegion = urlParams.get('region');
-            const urlPrefecture = urlParams.get('prefecture');
-    
-            if (urlRegion) region = urlRegion;
-            if (urlPrefecture) prefecture = urlPrefecture;
-    
-            if (region && prefecture) {
-                const encodedRegion = encodeURIComponent(region);
-                const encodedPrefecture = encodeURIComponent(prefecture);
-                const rssUrl = `/rss/${feedType}?region=${encodedRegion}&prefecture=${encodedPrefecture}`;
-                console.log(rssUrl)
-                try {
-                    const response = await fetch(rssUrl, { credentials: 'same-origin' });
-                    if (response.ok) {
-                        document.getElementById('feed-data').innerHTML = await response.text();
-                    } else {
-                        document.getElementById('feed-data').innerHTML = `<p>フィードの取得に失敗しました。</p>`;
-                    }
-                } catch (error) {
-                    console.error(error);
-                    document.getElementById('feed-data').innerHTML = `<p>エラーが発生しました。</p>`;
-                }
-            }
-        }
-        loadFeedData();
         regionSelect.addEventListener('change', updatePrefectures);
     }
 });
