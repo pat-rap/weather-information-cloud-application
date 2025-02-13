@@ -14,10 +14,21 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI()
+app_mount_path = "app/static"
+template_directory = "app/templates"
 
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
-templates = Jinja2Templates(directory="app/templates")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # アプリケーション起動時の初期化処理
+    background_tasks = BackgroundTasks()
+    background_tasks.add_task(periodic_fetch, background_tasks)
+    yield
+    # シャットダウン時のクリーンアップ処理（必要なら実装）
+
+app = FastAPI(lifespan=lifespan)
+
+app.mount("/static", StaticFiles(directory=app_mount_path), name="static")
+templates = Jinja2Templates(directory=template_directory)
 
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request,
@@ -103,14 +114,6 @@ async def periodic_fetch(background_tasks: BackgroundTasks):
                 info["frequency_type"]
             )
         await asyncio.sleep(PERIODIC_FETCH_INTERVAL)
-
-@app.on_event("startup")
-async def startup_event(background_tasks: BackgroundTasks = BackgroundTasks()):
-    """
-    アプリケーション起動時のイベントハンドラ。
-    バックグラウンドタスクを開始する。
-    """
-    background_tasks.add_task(periodic_fetch, background_tasks)
 
 @app.get("/delete_old_entries")
 async def delete_old_entries_endpoint(background_tasks: BackgroundTasks):

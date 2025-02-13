@@ -1,6 +1,5 @@
 # config.py (新規作成)
 
-from datetime import datetime
 import os
 
 LAST_MODIFIED_TIMES = { "regular": None, "extra": None, "eqvol": None, "other": None, }
@@ -9,7 +8,8 @@ THROTTLE_INTERVALS = { "extra": 60, "eqvol": 60, "other": 60,
     # "regular": 60,
 }
 
-# フィード情報もこちらに移動
+PERIODIC_FETCH_INTERVAL = int(os.environ.get("PERIODIC_FETCH_INTERVAL", "600").split()[0])
+
 FEED_INFO = {
     # "regular": {"url": "https://www.data.jma.go.jp/developer/xml/feed/regular.xml", "category": "天気概況", "frequency_type": "高頻度"},
     "extra": {"url": "https://www.data.jma.go.jp/developer/xml/feed/extra.xml", "category": "警報・注意報", "frequency_type": "高頻度"},
@@ -173,5 +173,3 @@ def get_prefecture_from_kishodai(kishodai_name: str) -> list[str]:
         if kishodai_name in offices:
             return offices[kishodai_name]
     return []
-
-PERIODIC_FETCH_INTERVAL = int(os.environ.get("PERIODIC_FETCH_INTERVAL", "600").split()[0])
