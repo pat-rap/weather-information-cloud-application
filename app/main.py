@@ -7,7 +7,7 @@ import asyncio
 from .auth import get_current_user, set_auth_cookie, remove_auth_cookie, TokenData
 from . import rss_reader
 from .database import delete_old_entries
-from .config import REGIONS, PREFECTURES, FEED_INFO
+from .config import REGIONS, PREFECTURES, FEED_INFO, PERIODIC_FETCH_INTERVAL
 import logging
 
 # ルートロガーの設定
@@ -102,7 +102,7 @@ async def periodic_fetch(background_tasks: BackgroundTasks):
                 info["category"],
                 info["frequency_type"]
             )
-        await asyncio.sleep(600)  # 例: 10分ごとに実行
+        await asyncio.sleep(PERIODIC_FETCH_INTERVAL)
 
 @app.on_event("startup")
 async def startup_event(background_tasks: BackgroundTasks = BackgroundTasks()):

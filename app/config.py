@@ -1,18 +1,11 @@
 # config.py (新規作成)
 
 from datetime import datetime
+import os
 
-LAST_MODIFIED_TIMES = {
-    "regular": None,
-    "extra": None,
-    "eqvol": None,
-    "other": None,
-}
+LAST_MODIFIED_TIMES = { "regular": None, "extra": None, "eqvol": None, "other": None, }
 
-THROTTLE_INTERVALS = {
-    "extra": 60,
-    "eqvol": 60,
-    "other": 60,
+THROTTLE_INTERVALS = { "extra": 60, "eqvol": 60, "other": 60,
     # "regular": 60,
 }
 
@@ -142,3 +135,5 @@ PREFECTURES = ["宗谷地方", "上川・留萌地方", "石狩・空知・後�
 def get_prefecture_from_kishodai(kishodai_name: str) -> list[str]:
     """気象台名から都道府県名を推測(複数県対応)"""
     return PUBLISHING_OFFICE_MAPPING.get(kishodai_name, [])
+
+PERIODIC_FETCH_INTERVAL = int(os.environ.get("PERIODIC_FETCH_INTERVAL", 600))
