@@ -118,7 +118,9 @@ async def periodic_fetch(background_tasks: BackgroundTasks):
     定期的にフィードを取得・更新する関数。
     """
     while True:
+        logger.info("periodic_fetch started")  # ログ追加
         for feed_type, info in FEED_INFO.items():
+            logger.info(f"Adding task for feed_type: {feed_type}")  # ログ追加
             background_tasks.add_task(
                 rss_reader.fetch_and_store_feed_data,
                 feed_type,
@@ -127,6 +129,7 @@ async def periodic_fetch(background_tasks: BackgroundTasks):
                 info["frequency_type"]
             )
         await asyncio.sleep(PERIODIC_FETCH_INTERVAL)
+        logger.info(f"periodic_fetch sleeping for {PERIODIC_FETCH_INTERVAL} seconds")  # ログ追加
 
 @app.get("/delete_old_entries")
 async def delete_old_entries_endpoint(background_tasks: BackgroundTasks):
