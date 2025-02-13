@@ -1,10 +1,11 @@
 import requests
 from bs4 import BeautifulSoup
-from typing import List, Dict, Optional,Tuple
+from typing import List, Dict, Optional, Tuple
 from datetime import datetime, timezone, timedelta
-from .config import REGIONS_DATA, get_prefecture_from_kishodai, LAST_MODIFIED_TIMES, THROTTLE_INTERVALS
+from .config import REGIONS_DATA, get_prefecture_from_kishodai, LAST_MODIFIED_TIMES, HIGH_FREQUENCY_INTERVAL, LONG_FREQUENCY_INTERVAL, DOWNLOAD_LIMIT_THRESHOLD
 from .database import execute_sql
 import logging
+import os
 
 # ルートロガーの設定
 logging.basicConfig(level=logging.DEBUG)
@@ -84,7 +85,7 @@ def extract_prefecture_from_content(content: str) -> List[str]:
 def parse_detail_xml(url:str) -> tuple[List[str],Optional[str]]:
     """詳細XMLをパースして都道府県情報と発表官署を取得(都道府県は複数)"""
     global downloaded_bytes
-    if downloaded_bytes > DOWNLOAD_LIMIT * 0.8: # 80%を超えたら詳細XMLのダウンロードを控える
+    if downloaded_bytes > DOWNLOAD_LIMIT * DOWNLOAD_LIMIT_THRESHOLD: # 80%を超えたら詳細XMLのダウンロードを控える
         logger.warning("Approaching download limit. Skipping detail XML parsing.")
         return [], None
 
@@ -223,7 +224,7 @@ def insert_or_update_feed_data(parsed_feed_data: Tuple[List[Dict], Optional[str]
             frequency_type = EXCLUDED.frequency_type,
             last_fetched = EXCLUDED.last_fetched
         RETURNING id
-    """, (url, feed_title, feed_subtitle, feed_updated_dt, feed_id_in_atom, rights, category, frequency_type, datetime.now()), fetchone=True)['id']
+    """, (url, feed_title, feed_subtitle, feed_updated_dt, feed_id_in_atom, rights, category, frequency_type, datetime.now(timezone.utc)), fetchone=True)['id']
 
     # 2. feed_entries テーブルへの挿入 (都道府県ごとに分割)
     for entry in entries:
@@ -250,7 +251,14 @@ def fetch_and_store_feed_data(feed_type: str, url: str, category: str, frequency
     指定されたフィードを取得し、DBに保存する。
     スロットリングも考慮する。
     """
-    if should_throttle(url, THROTTLE_INTERVALS.get(feed_type, 60)):
+    # ダウンロード制限に近づいている場合は、低頻度のフィードをスキップ
+    if downloaded_bytes > DOWNLOAD_LIMIT * DOWNLOAD_LIMIT_THRESHOLD and frequency_type == "低頻度":
+        logger.info(f"Skipping low frequency feed due to download limit: {feed_type}")
+        return
+
+    interval = HIGH_FREQUENCY_INTERVAL if frequency_type == "高頻度" else LONG_FREQUENCY_INTERVAL
+
+    if should_throttle(url, interval):
         logger.info(f"Throttling request for feed type: {feed_type}, url: {url}")
         return
 

@@ -4,18 +4,24 @@ import os
 
 LAST_MODIFIED_TIMES = { "regular": None, "extra": None, "eqvol": None, "other": None, }
 
-THROTTLE_INTERVALS = { "extra": 60, "eqvol": 60, "other": 60,
-    # "regular": 60,
-}
-
 PERIODIC_FETCH_INTERVAL = int(os.environ.get("PERIODIC_FETCH_INTERVAL", "600").split()[0])
+
+# 高頻度フィードと長期フィードの間隔（秒）
+HIGH_FREQUENCY_INTERVAL = int(os.environ.get("HIGH_FREQUENCY_INTERVAL", "300"))  # デフォルトは5分
+LONG_FREQUENCY_INTERVAL = int(os.environ.get("LONG_FREQUENCY_INTERVAL", "7200"))  # デフォルトは2時間
+
+# ダウンロード制限の閾値（環境変数から取得、デフォルトは80%）
+DOWNLOAD_LIMIT_THRESHOLD = float(os.environ.get("DOWNLOAD_LIMIT_THRESHOLD", "0.8"))
 
 FEED_INFO = {
     # "regular": {"url": "https://www.data.jma.go.jp/developer/xml/feed/regular.xml", "category": "天気概況", "frequency_type": "高頻度"},
     "extra": {"url": "https://www.data.jma.go.jp/developer/xml/feed/extra.xml", "category": "警報・注意報", "frequency_type": "高頻度"},
     "eqvol": {"url": "https://www.data.jma.go.jp/developer/xml/feed/eqvol.xml", "category": "地震・火山", "frequency_type": "高頻度"},
     "other": {"url": "https://www.data.jma.go.jp/developer/xml/feed/other.xml", "category": "その他", "frequency_type": "高頻度"},
-}
+    # "regular_l": {"url": "https://www.data.jma.go.jp/developer/xml/feed/regular_l.xml", "category": "天気概況", "frequency_type": "低頻度"},
+    "extra_l": {"url": "https://www.data.jma.go.jp/developer/xml/feed/extra_l.xml", "category": "警報・注意報", "frequency_type": "低頻度"},
+    "eqvol_l": {"url": "https://www.data.jma.go.jp/developer/xml/feed/eqvol_l.xml", "category": "地震・火山", "frequency_type": "低頻度"},
+    "other_l": {"url": "https://www.data.jma.go.jp/developer/xml/feed/other_l.xml", "category": "その他", "frequency_type": "低頻度"},}
 
 REGIONS_DATA = {
     "北海道": {

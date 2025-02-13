@@ -4,6 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from typing import Optional
 import asyncio
+from contextlib import asynccontextmanager
 from .auth import get_current_user, set_auth_cookie, remove_auth_cookie, TokenData
 from . import rss_reader
 from .database import delete_old_entries
