@@ -7,7 +7,7 @@ import asyncio
 from .auth import get_current_user, set_auth_cookie, remove_auth_cookie, TokenData
 from . import rss_reader
 from .database import delete_old_entries
-from .config import REGIONS, PREFECTURES, FEED_INFO, PERIODIC_FETCH_INTERVAL
+from .config import REGIONS_DATA, FEED_INFO, PERIODIC_FETCH_INTERVAL
 import logging
 
 # ルートロガーの設定
@@ -52,8 +52,8 @@ async def root(request: Request,
 
     context = {
         "request": request,
-        "regions": REGIONS,
-        "prefectures": PREFECTURES,
+        "regions": list(REGIONS_DATA.keys()),
+        "prefectures": [pref for data in REGIONS_DATA.values() for pref in data.get("prefectures", [])],
         "selected_region": context_region,
         "selected_prefecture": context_prefecture,
         "selected_feed_type": context_feed_type,
@@ -87,7 +87,7 @@ async def get_prefectures(region: str = Query(...)) -> list[str]:
     """
     指定された地域に対応する都道府県のリストを返す。
     """
-    return REGIONS.get(region, [])
+    return REGIONS_DATA.get(region, {}).get("prefectures", [])
 
 async def periodic_fetch(background_tasks: BackgroundTasks):
     """

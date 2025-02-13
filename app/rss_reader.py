@@ -2,13 +2,15 @@ import requests
 from bs4 import BeautifulSoup
 from typing import List, Dict, Optional,Tuple
 from datetime import datetime, timezone, timedelta
-from .config import PREFECTURES, get_prefecture_from_kishodai, REGIONS, LAST_MODIFIED_TIMES, THROTTLE_INTERVALS
+from .config import REGIONS_DATA, get_prefecture_from_kishodai, LAST_MODIFIED_TIMES, THROTTLE_INTERVALS
 from .database import execute_sql
 import logging
 
 # ルートロガーの設定
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
+
+ALL_PREFECTURES = [pref for data in REGIONS_DATA.values() for pref in data.get("prefectures", [])]
 
 # ダウンロード制限値（10GB）
 DOWNLOAD_LIMIT = 10 * 1024 * 1024 * 1024  # 10GB
@@ -74,7 +76,7 @@ def extract_prefecture_from_content(content: str) -> List[str]:
     if not content:
         return prefectures_found
 
-    for pref in PREFECTURES:
+    for pref in ALL_PREFECTURES:
         if pref in content:
             prefectures_found.append(pref)
     return prefectures_found
@@ -184,7 +186,7 @@ def get_filtered_entries_from_db(feed_url: str, region: Optional[str] = None, pr
     params = [feed_id]
 
     if region:
-        prefectures_in_region = REGIONS.get(region, [])
+        prefectures_in_region =  REGIONS_DATA.get(region, {}).get("prefectures", [])
         if prefectures_in_region:
             placeholders = ', '.join(['%s'] * len(prefectures_in_region))
             query += f" AND prefecture IN ({placeholders})"
