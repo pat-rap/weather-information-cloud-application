@@ -57,9 +57,21 @@ async def root(request: Request,
         entries = []
         feed_title = ""
     else:
-        entries = rss_reader.get_filtered_entries_from_db(
-            FEED_INFO[context_feed_type]["url"], context_region, context_prefecture
-        )
+        # feed_type に対応する高頻度・低頻度両方のURLを取得
+        feed_urls = [
+            FEED_INFO[context_feed_type]["url"],
+            FEED_INFO[context_feed_type + "_l"]["url"]
+        ] if context_feed_type + "_l" in FEED_INFO else [FEED_INFO[context_feed_type]["url"]]
+
+        entries = []
+        for url in feed_urls:
+            entries.extend(rss_reader.get_filtered_entries_from_db(
+                url, context_region, context_prefecture
+            ))
+
+        # entry_updated でソート (降順)
+        entries.sort(key=lambda x: x['entry_updated'], reverse=True)
+
         feed_title = FEED_INFO[context_feed_type]["category"]
 
     context = {

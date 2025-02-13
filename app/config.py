@@ -14,11 +14,11 @@ LONG_FREQUENCY_INTERVAL = int(os.environ.get("LONG_FREQUENCY_INTERVAL", "7200"))
 DOWNLOAD_LIMIT_THRESHOLD = float(os.environ.get("DOWNLOAD_LIMIT_THRESHOLD", "0.8"))
 
 FEED_INFO = {
-    # "regular": {"url": "https://www.data.jma.go.jp/developer/xml/feed/regular.xml", "category": "天気概況", "frequency_type": "高頻度"},
+    "regular": {"url": "https://www.data.jma.go.jp/developer/xml/feed/regular.xml", "category": "天気概況", "frequency_type": "高頻度"},
     "extra": {"url": "https://www.data.jma.go.jp/developer/xml/feed/extra.xml", "category": "警報・注意報", "frequency_type": "高頻度"},
     "eqvol": {"url": "https://www.data.jma.go.jp/developer/xml/feed/eqvol.xml", "category": "地震・火山", "frequency_type": "高頻度"},
     "other": {"url": "https://www.data.jma.go.jp/developer/xml/feed/other.xml", "category": "その他", "frequency_type": "高頻度"},
-    # "regular_l": {"url": "https://www.data.jma.go.jp/developer/xml/feed/regular_l.xml", "category": "天気概況", "frequency_type": "低頻度"},
+    "regular_l": {"url": "https://www.data.jma.go.jp/developer/xml/feed/regular_l.xml", "category": "天気概況", "frequency_type": "低頻度"},
     "extra_l": {"url": "https://www.data.jma.go.jp/developer/xml/feed/extra_l.xml", "category": "警報・注意報", "frequency_type": "低頻度"},
     "eqvol_l": {"url": "https://www.data.jma.go.jp/developer/xml/feed/eqvol_l.xml", "category": "地震・火山", "frequency_type": "低頻度"},
     "other_l": {"url": "https://www.data.jma.go.jp/developer/xml/feed/other_l.xml", "category": "その他", "frequency_type": "低頻度"},}
