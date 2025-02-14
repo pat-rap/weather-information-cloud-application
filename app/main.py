@@ -21,8 +21,7 @@ template_directory = "app/templates"
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # アプリケーション起動時の初期化処理
-    background_tasks = BackgroundTasks()
-    background_tasks.add_task(periodic_fetch, background_tasks)
+    asyncio.create_task(periodic_fetch())
     yield
     # シャットダウン時のクリーンアップ処理（必要なら実装）
 
@@ -113,21 +112,24 @@ async def get_prefectures(region: str = Query(...)) -> list[str]:
     """
     return REGIONS_DATA.get(region, {}).get("prefectures", [])
 
-async def periodic_fetch(background_tasks: BackgroundTasks):
+async def periodic_fetch():
     """
     定期的にフィードを取得・更新する関数。
     """
     while True:
-        logger.info("periodic_fetch started")  # ログ追加
+        logger.info("periodic_fetch started - outer loop")
         for feed_type, info in FEED_INFO.items():
             logger.info(f"Adding task for feed_type: {feed_type}")  # ログ追加
-            background_tasks.add_task(
-                rss_reader.fetch_and_store_feed_data,
+            result = await rss_reader.fetch_and_store_feed_data(
                 feed_type,
                 info["url"],
                 info["category"],
                 info["frequency_type"]
             )
+            if result:
+                logger.info(f"fetch_and_store_feed_data succeeded for {feed_type}")
+            else:
+                logger.info(f"fetch_and_store_feed_data failed for {feed_type}")
         await asyncio.sleep(PERIODIC_FETCH_INTERVAL)
         logger.info(f"periodic_fetch sleeping for {PERIODIC_FETCH_INTERVAL} seconds")  # ログ追加
 

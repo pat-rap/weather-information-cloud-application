@@ -20,7 +20,7 @@ def job():
         logger.error(f"Error triggering /delete_old_entries: {e}") # ログ追加
 
 # 毎日午前3時に実行
-schedule.every().day.at("03:00").do(job)
+schedule.every().day.at("08:00").do(job)
 
 while True:
     schedule.run_pending()

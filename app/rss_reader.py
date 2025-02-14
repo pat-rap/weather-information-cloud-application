@@ -6,6 +6,7 @@ from .config import REGIONS_DATA, get_prefecture_from_kishodai, LAST_MODIFIED_TI
 from .database import execute_sql
 import logging
 import os
+import feedparser
 
 # ルートロガーの設定
 logging.basicConfig(level=logging.DEBUG)
@@ -65,6 +66,11 @@ def fetch_rss_feed(url: str, last_modified: Optional[datetime] = None) -> Option
 
         downloaded_bytes += response_size
         logger.info(f"Downloaded: {response_size} bytes, Total: {downloaded_bytes} bytes")
+
+        # レスポンスのエンコーディングが None の場合、'utf-8' を仮定
+        if response.encoding is None:
+            response.encoding = 'utf-8'
+
         return response
 
     except requests.exceptions.RequestException as e:
@@ -120,48 +126,54 @@ def parse_rss_feed(response: requests.Response) -> Tuple[List[Dict], Optional[st
     RSSフィードのレスポンスをパースし、必要な情報を抽出する。
     """
     try:
-        soup = BeautifulSoup(response.content, 'xml')
+        # feedparser を使ってパース
+        feed = feedparser.parse(response.text)
+
+        if feed.bozo:
+            logger.warning(f"Feed parsing error: {feed.bozo_exception}")
+
         entries = []
 
-        for item in soup.find_all('entry'):
+        for item in feed.entries:
             # content から都道府県を抽出
-            prefectures = extract_prefecture_from_content(item.find('content').text if item.find('content') else None)
+            prefectures = extract_prefecture_from_content(item.get('content', [{}])[0].get('value', ''))
 
             # content から抽出できない場合、author から都道府県を特定
-            author_name = item.find('author').find('name').text if item.find('author') and item.find('author').find('name') else None
+            author_name = item.get('author_detail', {}).get('name')
             if not prefectures and author_name:
                 prefectures = get_prefecture_from_kishodai(author_name)
 
             # contentからもauthorからも特定できない場合のみ、詳細XMLをパース
             detail_prefectures = []
+            detail_publishing_office = None # 初期化
             if not prefectures:
-                detail_prefectures, detail_publishing_office = parse_detail_xml(item.id.text) if item.id else ([], None)
+                detail_prefectures, detail_publishing_office = parse_detail_xml(item.get('id')) if item.get('id') else ([], None)
                 if detail_prefectures: #詳細XMLで取得成功
                     prefectures = detail_prefectures
 
-            publishing_office = author_name if author_name else (detail_publishing_office if 'detail_publishing_office' in locals() else None)
+            publishing_office = author_name if author_name else detail_publishing_office
 
             entry = {
-                'title': item.title.text if item.title else None,
-                'link': item.link.text if item.link else None,
-                'updated': item.updated.text if item.updated else (item.pubDate.text if item.pubDate else None),
+                'title': item.get('title'),
+                'link': item.get('link'),
+                'updated': item.get('updated'),
                 'publishing_office': publishing_office,
-                'content': item.find('content').text if item.find('content') else None,
-                'id': item.id.text if item.id else None,
-                'prefectures': prefectures # 都道府県 (複数)
+                'content': item.get('content', [{}])[0].get('value', ''),
+                'id': item.get('id'),
+                'prefectures': prefectures
             }
             entries.append(entry)
 
-        feed_title = soup.find('title').text if soup.find('title') else None
-        feed_subtitle = soup.find('subtitle').text if soup.find('subtitle') else None
-        feed_updated = soup.find('updated').text if soup.find('updated') else None
-        feed_id_in_atom = soup.find('id').text if soup.find('id') else None
-        rights = soup.find('rights').text if soup.find('rights') else None
+        feed_title = feed.feed.get('title')
+        feed_subtitle = feed.feed.get('subtitle')
+        feed_updated = feed.feed.get('updated')
+        feed_id_in_atom = feed.feed.get('id')
+        rights = feed.feed.get('rights')
 
         return entries, feed_title, feed_subtitle, feed_updated, feed_id_in_atom, rights
 
     except Exception as e:
-        print(f"Error parsing RSS feed: {e}")
+        logger.exception(f"Error parsing RSS feed: {e}")
         return [], None, None, None, None, None
 
 def should_throttle(url: str, interval: int) -> bool:
@@ -251,28 +263,39 @@ def fetch_and_store_feed_data(feed_type: str, url: str, category: str, frequency
     指定されたフィードを取得し、DBに保存する。
     スロットリングも考慮する。
     """
+    logger.info(f"Fetching feed: {url}")
+
     # ダウンロード制限に近づいている場合は、低頻度のフィードをスキップ
     if downloaded_bytes > DOWNLOAD_LIMIT * DOWNLOAD_LIMIT_THRESHOLD and frequency_type == "低頻度":
         logger.info(f"Skipping low frequency feed due to download limit: {feed_type}")
-        return
+        return False
 
     interval = HIGH_FREQUENCY_INTERVAL if frequency_type == "高頻度" else LONG_FREQUENCY_INTERVAL
 
     if should_throttle(url, interval):
         logger.info(f"Throttling request for feed type: {feed_type}, url: {url}")
-        return
+        return False
 
     response = fetch_rss_feed(url, LAST_MODIFIED_TIMES.get(feed_type))
 
     if response is None:
         logger.info(f"No update for feed type: {feed_type}")
-        return
+        return False
 
     parsed_feed_data = parse_rss_feed(response)
 
     last_modified_str = response.headers.get('Last-Modified')
     if last_modified_str:
-        LAST_MODIFIED_TIMES[feed_type] = datetime.strptime(last_modified_str, '%a, %d %b %Y %H:%M:%S %Z')
+        try:
+            LAST_MODIFIED_TIMES[feed_type] = datetime.strptime(last_modified_str, '%a, %d %b %Y %H:%M:%S %Z')
+        except ValueError:
+             logger.warning(f"Invalid date format in Last-Modified header: {last_modified_str}")
 
-    insert_or_update_feed_data(parsed_feed_data, feed_type, url, category, frequency_type)
-    logger.info(f"Successfully fetched and stored data for feed type: {feed_type}")
+
+    if parsed_feed_data:
+      insert_or_update_feed_data(parsed_feed_data, feed_type, url, category, frequency_type)
+      logger.info(f"Successfully fetched and stored data for feed type: {feed_type}, url: {url}")
+      return True
+    else:
+        logger.error(f"Failed to parse feed data for feed type: {feed_type}, url:{url}")
+        return False
