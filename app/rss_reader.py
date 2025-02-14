@@ -34,7 +34,7 @@ def can_download(additional: int) -> bool:
     reset_bucket_if_needed()
     return (downloaded_bytes + additional) <= DOWNLOAD_LIMIT
 
-def fetch_rss_feed(url: str, last_modified: Optional[datetime] = None) -> Optional[requests.Response]:
+async def fetch_rss_feed(url: str, last_modified: Optional[datetime] = None) -> Optional[requests.Response]:
     """
     指定されたURLからRSSフィードを取得する。
     If-Modified-Since ヘッダーを活用し、更新がない場合は None を返す。
@@ -88,14 +88,14 @@ def extract_prefecture_from_content(content: str) -> List[str]:
             prefectures_found.append(pref)
     return prefectures_found
 
-def parse_detail_xml(url:str) -> tuple[List[str],Optional[str]]:
+async def parse_detail_xml(url:str) -> tuple[List[str],Optional[str]]:
     """詳細XMLをパースして都道府県情報と発表官署を取得(都道府県は複数)"""
     global downloaded_bytes
     if downloaded_bytes > DOWNLOAD_LIMIT * DOWNLOAD_LIMIT_THRESHOLD: # 80%を超えたら詳細XMLのダウンロードを控える
         logger.warning("Approaching download limit. Skipping detail XML parsing.")
         return [], None
 
-    response = fetch_rss_feed(url) # ここでダウンロード
+    response = await fetch_rss_feed(url) # ここでダウンロード
     prefectures = []
     publishing_office = None
 
@@ -121,7 +121,7 @@ def parse_detail_xml(url:str) -> tuple[List[str],Optional[str]]:
     else:
         return [], None
 
-def parse_rss_feed(response: requests.Response) -> Tuple[List[Dict], Optional[str], Optional[str], Optional[str], Optional[str],Optional[str]]:
+async def parse_rss_feed(response: requests.Response) -> Tuple[List[Dict], Optional[str], Optional[str], Optional[str], Optional[str],Optional[str]]:
     """
     RSSフィードのレスポンスをパースし、必要な情報を抽出する。
     """
@@ -147,7 +147,7 @@ def parse_rss_feed(response: requests.Response) -> Tuple[List[Dict], Optional[st
             detail_prefectures = []
             detail_publishing_office = None # 初期化
             if not prefectures:
-                detail_prefectures, detail_publishing_office = parse_detail_xml(item.get('id')) if item.get('id') else ([], None)
+                detail_prefectures, detail_publishing_office = await parse_detail_xml(item.get('id')) if item.get('id') else ([], None)
                 if detail_prefectures: #詳細XMLで取得成功
                     prefectures = detail_prefectures
 
@@ -215,7 +215,7 @@ def get_filtered_entries_from_db(feed_url: str, region: Optional[str] = None, pr
     filtered_entries = execute_sql(query, tuple(params), fetchall=True)
     return filtered_entries
 
-def insert_or_update_feed_data(parsed_feed_data: Tuple[List[Dict], Optional[str], Optional[str], Optional[str], Optional[str],Optional[str]], feed_type: str, url: str, category: str, frequency_type: str):
+async def insert_or_update_feed_data(parsed_feed_data: Tuple[List[Dict], Optional[str], Optional[str], Optional[str], Optional[str],Optional[str]], feed_type: str, url: str, category: str, frequency_type: str):
     """パースされたフィードデータとその他の情報を受け取り、DBに挿入/更新する"""
     entries, feed_title, feed_subtitle, feed_updated, feed_id_in_atom, rights = parsed_feed_data
 
@@ -258,7 +258,7 @@ def insert_or_update_feed_data(parsed_feed_data: Tuple[List[Dict], Optional[str]
 
     return feed_id
 
-def fetch_and_store_feed_data(feed_type: str, url: str, category: str, frequency_type: str):
+async def fetch_and_store_feed_data(feed_type: str, url: str, category: str, frequency_type: str):
     """
     指定されたフィードを取得し、DBに保存する。
     スロットリングも考慮する。
@@ -276,13 +276,13 @@ def fetch_and_store_feed_data(feed_type: str, url: str, category: str, frequency
         logger.info(f"Throttling request for feed type: {feed_type}, url: {url}")
         return False
 
-    response = fetch_rss_feed(url, LAST_MODIFIED_TIMES.get(feed_type))
+    response = await fetch_rss_feed(url, LAST_MODIFIED_TIMES.get(feed_type))
 
     if response is None:
-        logger.info(f"No update for feed type: {feed_type}")
+        logger.info(f"No update for feed type: {feed_type}, url: {url}")
         return False
 
-    parsed_feed_data = parse_rss_feed(response)
+    parsed_feed_data = await parse_rss_feed(response)
 
     last_modified_str = response.headers.get('Last-Modified')
     if last_modified_str:
@@ -293,7 +293,7 @@ def fetch_and_store_feed_data(feed_type: str, url: str, category: str, frequency
 
 
     if parsed_feed_data:
-      insert_or_update_feed_data(parsed_feed_data, feed_type, url, category, frequency_type)
+      await insert_or_update_feed_data(parsed_feed_data, feed_type, url, category, frequency_type)
       logger.info(f"Successfully fetched and stored data for feed type: {feed_type}, url: {url}")
       return True
     else:

@@ -45,7 +45,7 @@
             <div>
                 <label for="feed_type">データの種類:</label>
                 <select id="feed_type" name="feed_type">
-                    <option value="regular" {% if selected_feed_type == "regular" %}selected{% endif %}>天気概況</option>
+                    <! - <option value="regular" {% if selected_feed_type == "regular" %}selected{% endif %}>天気概況</option> ->
                     <option value="extra" {% if selected_feed_type == "extra" %}selected{% endif %}>警報・注意報</option>
                     <option value="eqvol" {% if selected_feed_type == "eqvol" %}selected{% endif %}>地震・火山</option>
                     <option value="other" {% if selected_feed_type == "other" %}selected{% endif %}>その他</option>
