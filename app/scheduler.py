@@ -1,6 +1,4 @@
-import schedule
-import time
-import requests
+import schedule, time, requests
 import logging
 
 # ロガーの設定

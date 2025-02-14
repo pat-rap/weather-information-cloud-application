@@ -1,15 +1,13 @@
-import requests
 from bs4 import BeautifulSoup
 from typing import List, Dict, Optional, Tuple
 from datetime import datetime, timezone, timedelta
 from .config import REGIONS_DATA, get_prefecture_from_kishodai, LAST_MODIFIED_TIMES, HIGH_FREQUENCY_INTERVAL, LONG_FREQUENCY_INTERVAL, DOWNLOAD_LIMIT_THRESHOLD
 from .database import execute_sql
+import requests, feedparser
 import logging
-import os
-import feedparser
 
 # ルートロガーの設定
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 ALL_PREFECTURES = [pref for data in REGIONS_DATA.values() for pref in data.get("prefectures", [])]
@@ -65,7 +63,7 @@ async def fetch_rss_feed(url: str, last_modified: Optional[datetime] = None) -> 
             return None
 
         downloaded_bytes += response_size
-        logger.info(f"Downloaded: {response_size} bytes, Total: {downloaded_bytes} bytes")
+        logger.info(f"Downloaded: {response_size} bytes, Total: {downloaded_bytes / (1024 * 1024 * 1024):.3f} GB")
 
         # レスポンスのエンコーディングが None の場合、'utf-8' を仮定
         if response.encoding is None:
@@ -263,23 +261,23 @@ async def fetch_and_store_feed_data(feed_type: str, url: str, category: str, fre
     指定されたフィードを取得し、DBに保存する。
     スロットリングも考慮する。
     """
-    logger.info(f"Fetching feed: {url}")
+    #logger.info(f"Fetching feed: {url}")
 
     # ダウンロード制限に近づいている場合は、低頻度のフィードをスキップ
     if downloaded_bytes > DOWNLOAD_LIMIT * DOWNLOAD_LIMIT_THRESHOLD and frequency_type == "低頻度":
-        logger.info(f"Skipping low frequency feed due to download limit: {feed_type}")
+        #logger.info(f"Skipping low frequency feed due to download limit: {feed_type}")
         return False
 
     interval = HIGH_FREQUENCY_INTERVAL if frequency_type == "高頻度" else LONG_FREQUENCY_INTERVAL
 
     if should_throttle(url, interval):
-        logger.info(f"Throttling request for feed type: {feed_type}, url: {url}")
+        #logger.info(f"Throttling request for feed type: {feed_type}, url: {url}")
         return False
 
     response = await fetch_rss_feed(url, LAST_MODIFIED_TIMES.get(feed_type))
 
     if response is None:
-        logger.info(f"No update for feed type: {feed_type}, url: {url}")
+        #logger.info(f"No update for feed type: {feed_type}, url: {url}")
         return False
 
     parsed_feed_data = await parse_rss_feed(response)
@@ -294,7 +292,7 @@ async def fetch_and_store_feed_data(feed_type: str, url: str, category: str, fre
 
     if parsed_feed_data:
       await insert_or_update_feed_data(parsed_feed_data, feed_type, url, category, frequency_type)
-      logger.info(f"Successfully fetched and stored data for feed type: {feed_type}, url: {url}")
+      #logger.info(f"Successfully fetched and stored data for feed type: {feed_type}, url: {url}")
       return True
     else:
         logger.error(f"Failed to parse feed data for feed type: {feed_type}, url:{url}")

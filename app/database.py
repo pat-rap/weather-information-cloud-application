@@ -54,4 +54,3 @@ def delete_old_entries(days: int = 7): # 追加
         print(f"{days}日以上前のエントリを削除しました。")
     except Exception as e:
         print(f"Error deleting old entries: {e}")
-
