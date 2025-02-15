@@ -4,6 +4,9 @@ import os
 
 LAST_MODIFIED_TIMES = { "regular": None, "extra": None, "eqvol": None, "other": None, }
 
+# ダウンロード制限値（10GB）
+DOWNLOAD_LIMIT = 10 * 1024 * 1024 * 1024  # 10GB
+
 # 定期取得の基本間隔（秒）
 PERIODIC_FETCH_INTERVAL = int(os.environ.get("PERIODIC_FETCH_INTERVAL", "300").split()[0])
 
@@ -19,11 +22,11 @@ LONG_FREQUENCY_INTERVAL = int(PERIODIC_FETCH_INTERVAL * LONG_FREQUENCY_MULTIPLIE
 DOWNLOAD_LIMIT_THRESHOLD = float(os.environ.get("DOWNLOAD_LIMIT_THRESHOLD", "0.8"))
 
 FEED_INFO = {
-#    "regular": {"url": "https://www.data.jma.go.jp/developer/xml/feed/regular.xml", "category": "天気概況", "frequency_type": "高頻度"},
+    "regular": {"url": "https://www.data.jma.go.jp/developer/xml/feed/regular.xml", "category": "天気概況", "frequency_type": "高頻度"},
     "extra": {"url": "https://www.data.jma.go.jp/developer/xml/feed/extra.xml", "category": "警報・注意報", "frequency_type": "高頻度"},
     "eqvol": {"url": "https://www.data.jma.go.jp/developer/xml/feed/eqvol.xml", "category": "地震・火山", "frequency_type": "高頻度"},
     "other": {"url": "https://www.data.jma.go.jp/developer/xml/feed/other.xml", "category": "その他", "frequency_type": "高頻度"},
-#    "regular_l": {"url": "https://www.data.jma.go.jp/developer/xml/feed/regular_l.xml", "category": "天気概況", "frequency_type": "低頻度"},
+    "regular_l": {"url": "https://www.data.jma.go.jp/developer/xml/feed/regular_l.xml", "category": "天気概況", "frequency_type": "低頻度"},
     "extra_l": {"url": "https://www.data.jma.go.jp/developer/xml/feed/extra_l.xml", "category": "警報・注意報", "frequency_type": "低頻度"},
     "eqvol_l": {"url": "https://www.data.jma.go.jp/developer/xml/feed/eqvol_l.xml", "category": "地震・火山", "frequency_type": "低頻度"},
     "other_l": {"url": "https://www.data.jma.go.jp/developer/xml/feed/other_l.xml", "category": "その他", "frequency_type": "低頻度"},}
@@ -136,19 +139,7 @@ REGIONS_DATA = {
             "宮古島地方気象台": ["宮古島地方"],
             "石垣島地方気象台": ["八重山地方"],
         }
-    },
-#    "空港": {
-#        "prefectures": ["新千歳空港", "成田国際空港", "東京国際空港", "中部国際空港", "関西国際空港", "福岡空港", "那覇空港"],
-#        "offices": {
-#            "新千歳航空測候所": ["新千歳空港"],
-#            "成田航空地方気象台": ["成田空港"],
-#            "東京航空地方気象台": ["羽田空港"],
-#            "中部航空地方気象台": ["中部国際空港"],
-#            "関西航空地方気象台": ["関西国際空港"],
-#            "福岡航空地方気象台": ["福岡空港"],
-#            "那覇航空測候所": ["那覇空港"]
-#        }
-#    }
+    }
 }
 
 def get_prefecture_from_kishodai(kishodai_name: str) -> list[str]:

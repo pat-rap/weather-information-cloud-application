@@ -1,7 +1,7 @@
 from bs4 import BeautifulSoup
 from typing import List, Dict, Optional, Tuple
 from datetime import datetime, timezone, timedelta
-from .config import REGIONS_DATA, get_prefecture_from_kishodai, LAST_MODIFIED_TIMES, HIGH_FREQUENCY_INTERVAL, LONG_FREQUENCY_INTERVAL, DOWNLOAD_LIMIT_THRESHOLD
+from .config import REGIONS_DATA, get_prefecture_from_kishodai, LAST_MODIFIED_TIMES, HIGH_FREQUENCY_INTERVAL, LONG_FREQUENCY_INTERVAL, DOWNLOAD_LIMIT_THRESHOLD, DOWNLOAD_LIMIT
 from .database import execute_sql
 import requests, feedparser
 import logging
@@ -12,8 +12,6 @@ logger = logging.getLogger(__name__)
 
 ALL_PREFECTURES = [pref for data in REGIONS_DATA.values() for pref in data.get("prefectures", [])]
 
-# ダウンロード制限値（10GB）
-DOWNLOAD_LIMIT = 10 * 1024 * 1024 * 1024  # 10GB
 # 現在の消費量（グローバルで管理。実際は永続ストレージやRedisなどの外部キャッシュにするのが望ましい）
 downloaded_bytes = 0
 # 最後にバケットをリセットした時刻。毎日リセットできる仕組みを別途実装する
@@ -89,7 +87,7 @@ def extract_prefecture_from_content(content: str) -> List[str]:
 async def parse_detail_xml(url:str) -> tuple[List[str],Optional[str]]:
     """詳細XMLをパースして都道府県情報と発表官署を取得(都道府県は複数)"""
     global downloaded_bytes
-    if downloaded_bytes > DOWNLOAD_LIMIT * DOWNLOAD_LIMIT_THRESHOLD: # 80%を超えたら詳細XMLのダウンロードを控える
+    if downloaded_bytes > DOWNLOAD_LIMIT * DOWNLOAD_LIMIT_THRESHOLD: # しきい値を超えたら詳細XMLのダウンロードを控える
         logger.warning("Approaching download limit. Skipping detail XML parsing.")
         return [], None
 
