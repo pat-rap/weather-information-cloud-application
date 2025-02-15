@@ -7,3 +7,4 @@ WICA/
 alembic.ini
 alembic/
 .env
+ssl/
