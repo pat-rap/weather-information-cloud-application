@@ -63,10 +63,11 @@ async def fetch_rss_feed(url: str, last_modified: Optional[datetime] = None) -> 
         downloaded_bytes += response_size
         logger.info(f"Downloaded: {response_size} bytes, Total: {downloaded_bytes / (1024 * 1024 * 1024):.3f} GB")
 
-        # レスポンスのエンコーディングが None の場合、'utf-8' を仮定
-        if response.encoding is None:
+        # エンコーディングが未設定の場合、chardetで判定する
+        if response.encoding is None or response.encoding.lower() == "iso-8859-1":
             detected = chardet.detect(response.content)
             response.encoding = detected.get('encoding', 'utf-8')
+            logger.info(f"Detected encoding: {response.encoding}")
 
         return response
 
