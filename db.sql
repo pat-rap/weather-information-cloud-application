@@ -1,7 +1,6 @@
 DROP TABLE IF EXISTS feed_entries;
 DROP TABLE IF EXISTS feed_meta;
 
-
 CREATE TABLE IF NOT EXISTS feed_meta (
     id SERIAL PRIMARY KEY,
     feed_url TEXT UNIQUE NOT NULL,
@@ -21,10 +20,10 @@ CREATE TABLE IF NOT EXISTS feed_entries (
     entry_id_in_atom TEXT,
     entry_title TEXT,
     entry_updated TIMESTAMP WITH TIME ZONE,
-    publishing_office TEXT,  -- 発表官署
+    publishing_office TEXT,
     entry_link TEXT,
     entry_content TEXT,
-    prefecture TEXT,       -- 都道府県
+    prefecture TEXT,
     inserted_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (feed_id, entry_id_in_atom, publishing_office) -- 複合ユニークキー
+    UNIQUE (feed_id, entry_id_in_atom, publishing_office)
 );

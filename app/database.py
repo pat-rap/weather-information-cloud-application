@@ -1,5 +1,5 @@
-import psycopg2
-from psycopg2.extras import DictCursor
+import psycopg
+from psycopg.rows import dict_row
 from dotenv import load_dotenv
 import os
 from datetime import datetime, timedelta # 追加
@@ -9,14 +9,14 @@ load_dotenv()
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
 def get_db_connection():
-    conn = psycopg2.connect(DATABASE_URL)
+    conn = psycopg.connect(DATABASE_URL)
     return conn
 
 def execute_sql(sql: str, params=None, fetchone=False, fetchall=False):
     conn = None  # 初期化
     try:
         conn = get_db_connection()
-        with conn.cursor(cursor_factory=DictCursor) as cur:
+        with conn.cursor(row_factory=dict_row) as cur:
             cur.execute(sql, params)
             if fetchone:
                 result = cur.fetchone()
