@@ -20,10 +20,9 @@ template_directory = "app/templates"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # アプリケーション起動時の初期化処理
-    asyncio.create_task(periodic_fetch())
+    task = asyncio.create_task(periodic_fetch())
     yield
-    # シャットダウン時のクリーンアップ処理（必要なら実装）
+    task.cancel()
 
 app = FastAPI(lifespan=lifespan)
 
