@@ -1,8 +1,11 @@
 import psycopg
 from psycopg.rows import dict_row
 from dotenv import load_dotenv
-import os
+import os, logging
 from datetime import datetime, timedelta # 追加
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -26,15 +29,22 @@ def execute_sql(sql: str, params=None, fetchone=False, fetchall=False):
                 result = None
             conn.commit()
         return result
+    except psycopg.OperationalError as e:
+        logger.error(f"Database connection error: {e}")
+        raise
+    except psycopg.Error as e:
+        logger.error(f"Database query error: {e}")
+        if conn:
+            conn.rollback()
+        raise
     except Exception as e:
-        print(f"Database error: {e}")
+        logger.exception(f"Unexpected database error: {e}")
         if conn:
             conn.rollback()
         raise
     finally:
         if conn:
             conn.close()
-
 
 def init_db():
     """db.sqlを実行してテーブルを初期化する"""

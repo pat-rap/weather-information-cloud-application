@@ -76,5 +76,10 @@
         <p>ログインしていません。</p>
         <a href="/start">ログイン</a>
     {% endif %}
+    {% if error_message %}
+        <div class="error">
+            {{ error_message }}
+        </div>
+    {% endif %}
 </body>
 </html>

@@ -4,6 +4,7 @@ from datetime import datetime, timezone, timedelta
 from .config import REGIONS_DATA, get_prefecture_from_kishodai, LAST_MODIFIED_TIMES, HIGH_FREQUENCY_INTERVAL, LONG_FREQUENCY_INTERVAL, DOWNLOAD_LIMIT_THRESHOLD, DOWNLOAD_LIMIT
 from .database import execute_sql
 import requests, feedparser, chardet
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 import logging
 
 # ルートロガーの設定
@@ -30,6 +31,11 @@ def can_download(additional: int) -> bool:
     reset_bucket_if_needed()
     return (downloaded_bytes + additional) <= DOWNLOAD_LIMIT
 
+@retry(
+    stop=stop_after_attempt(3),  # 最大3回リトライ
+    wait=wait_exponential(multiplier=1, min=4, max=10),  # 指数関数的な待機時間 (1回目:4秒, 2回目:8秒, 3回目:10秒)
+    retry=retry_if_exception_type((requests.exceptions.ConnectionError, requests.exceptions.Timeout)) # リトライする例外
+)
 async def fetch_rss_feed(url: str, last_modified: Optional[datetime] = None) -> Optional[requests.Response]:
     """
     指定されたURLからRSSフィードを取得する。
@@ -71,8 +77,20 @@ async def fetch_rss_feed(url: str, last_modified: Optional[datetime] = None) -> 
 
         return response
 
+    except requests.exceptions.ConnectionError as e:
+        logger.error(f"Connection error fetching RSS feed ({url}): {e}")
+        return None
+    except requests.exceptions.Timeout as e:
+        logger.error(f"Timeout error fetching RSS feed ({url}): {e}")
+        return None
+    except requests.exceptions.HTTPError as e:
+        logger.error(f"HTTP error fetching RSS feed ({url}): {e}, Status Code: {response.status_code}")
+        return None
     except requests.exceptions.RequestException as e:
-        logger.error(f"Error fetching RSS feed: {e}")
+        logger.error(f"Error fetching RSS feed ({url}): {e}")
+        return None
+    except Exception as e: # 予期せぬエラー
+        logger.exception(f"Unexpected error fetching RSS feed ({url}): {e}")
         return None
 
 def extract_prefecture_from_content(content: str) -> List[str]:
@@ -80,10 +98,12 @@ def extract_prefecture_from_content(content: str) -> List[str]:
     prefectures_found = []
     if not content:
         return prefectures_found
-
-    for pref in ALL_PREFECTURES:
-        if pref in content:
-            prefectures_found.append(pref)
+    try:
+        for pref in ALL_PREFECTURES:
+            if pref in content:
+                prefectures_found.append(pref)
+    except Exception as e:
+        logger.exception(f"Unexpected error in extract_prefecture_from_content: {e}")
     return prefectures_found
 
 async def parse_detail_xml(url:str) -> tuple[List[str],Optional[str]]:
@@ -117,6 +137,7 @@ async def parse_detail_xml(url:str) -> tuple[List[str],Optional[str]]:
             logger.error(f"Error parsing detail XML: {e}")
             return [], None
     else:
+        logger.error(f"Failed to fetch detail XML ({url}). Skipping parsing.")
         return [], None
 
 async def parse_rss_feed(response: requests.Response) -> Tuple[List[Dict], Optional[str], Optional[str], Optional[str], Optional[str],Optional[str]]:
@@ -240,10 +261,11 @@ async def insert_or_update_feed_data(parsed_feed_data: Tuple[List[Dict], Optiona
     for entry in entries:
         try:
             entry_updated_dt = datetime.strptime(entry['updated'], '%Y-%m-%dT%H:%M:%S%z') if entry['updated'] else None
-        except ValueError:
+        except ValueError as e:
             try:
                 entry_updated_dt = datetime.strptime(entry['updated'], '%Y-%m-%dT%H:%M:%S') if entry['updated'] else None
-            except ValueError:
+            except ValueError as e:
+                logger.warning(f"Invalid date format in entry: {entry.get('updated')}, error: {e}")
                 entry_updated_dt = None
 
         # 都道府県ごとにレコードを挿入

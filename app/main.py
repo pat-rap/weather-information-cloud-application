@@ -63,10 +63,16 @@ async def root(request: Request,
         ] if context_feed_type + "_l" in FEED_INFO else [FEED_INFO[context_feed_type]["url"]]
 
         entries = []
-        for url in feed_urls:
-            entries.extend(rss_reader.get_filtered_entries_from_db(
-                url, context_region, context_prefecture
-            ))
+        try:
+            for url in feed_urls:
+                entries.extend(rss_reader.get_filtered_entries_from_db(
+                    url, context_region, context_prefecture
+                ))
+        except Exception as e:
+            logger.exception(f"Error getting entries from database: {e}")
+            entries = []  # エラーが発生した場合は空のリストにする
+            feed_title = ""
+            context["error_message"] = "データの取得中にエラーが発生しました。" # エラーメッセージ
 
         # entry_updated でソート (降順)
         entries.sort(key=lambda x: x['entry_updated'], reverse=True)
@@ -120,12 +126,16 @@ async def periodic_fetch():
         logger.info("periodic_fetch started - outer loop")
         for feed_type, info in FEED_INFO.items():
             logger.info(f"Adding task for feed_type: {feed_type}")  # ログ追加
-            result = await rss_reader.fetch_and_store_feed_data(
-                feed_type,
-                info["url"],
-                info["category"],
-                info["frequency_type"]
-            )
+            try:
+                result = await rss_reader.fetch_and_store_feed_data(
+                    feed_type,
+                    info["url"],
+                    info["category"],
+                    info["frequency_type"]
+                )
+            except Exception as e:
+                logger.error(f"Error in periodic_fetch for {feed_type}: {e}")
+                continue
             if result:
                 logger.info(f"fetch_and_store_feed_data succeeded for {feed_type}")
             else:

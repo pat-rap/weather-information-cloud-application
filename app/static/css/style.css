@@ -82,3 +82,9 @@ body.dark-mode a {
 body.dark-mode a:hover {
     color: #66d9ff; /* マウスオーバー時に少し明るくする */
 }
+
+.error {
+    color: red;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
