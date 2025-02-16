@@ -3,7 +3,7 @@ from typing import List, Dict, Optional, Tuple
 from datetime import datetime, timezone, timedelta
 from .config import REGIONS_DATA, get_prefecture_from_kishodai, LAST_MODIFIED_TIMES, HIGH_FREQUENCY_INTERVAL, LONG_FREQUENCY_INTERVAL, DOWNLOAD_LIMIT_THRESHOLD, DOWNLOAD_LIMIT
 from .database import execute_sql
-import requests, feedparser
+import requests, feedparser, chardet
 import logging
 
 # ルートロガーの設定
@@ -65,7 +65,8 @@ async def fetch_rss_feed(url: str, last_modified: Optional[datetime] = None) -> 
 
         # レスポンスのエンコーディングが None の場合、'utf-8' を仮定
         if response.encoding is None:
-            response.encoding = 'utf-8'
+            detected = chardet.detect(response.content)
+            response.encoding = detected.get('encoding', 'utf-8')
 
         return response
 

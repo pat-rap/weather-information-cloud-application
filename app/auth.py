@@ -64,7 +64,7 @@ def set_auth_cookie(response: Response, user_data: dict):
         key="access_token",
         value=access_token,
         httponly=True,
-        secure=False,  # ローカル開発環境では False
+        secure=True,  # ローカル開発環境では False
         samesite="lax",  # または "strict"
         path="/",  # クッキーの有効パスをルートに設定
         # domain="yourdomain.com",  # 必要に応じてドメインを設定

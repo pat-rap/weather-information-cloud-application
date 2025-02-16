@@ -2,7 +2,7 @@
 
 import os
 
-LAST_MODIFIED_TIMES = { "regular": None, "extra": None, "eqvol": None, "other": None, }
+LAST_MODIFIED_TIMES = { "extra": None, "eqvol": None, "other": None, }
 
 # ダウンロード制限値（10GB）
 DOWNLOAD_LIMIT = 10 * 1024 * 1024 * 1024  # 10GB
