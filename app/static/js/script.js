@@ -39,6 +39,7 @@ function getCookie(name) {
     const value = `; ${document.cookie}`;
     const parts = value.split(`; ${name}=`);
     if (parts.length === 2) return parts.pop().split(';').shift();
+    return "";
 }
 
 // クッキーに値を設定する関数 (必要に応じてエスケープ処理を追加)
@@ -55,6 +56,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const fontIncreaseBtn = document.getElementById('font-increase');
     const fontDecreaseBtn = document.getElementById('font-decrease');
     const themeToggleBtn = document.getElementById('theme-toggle');
+    const form = document.querySelector('form');
+
+    // ★ 1) クッキーから文字サイズを読み込む
+    let currentFontSize = parseFloat(getCookie('fontSize'));
+    if (!currentFontSize || isNaN(currentFontSize)) {
+        // クッキーに保存されていない、または無効な値の場合は初期値16pxに設定
+        currentFontSize = 16;
+    }
+    document.body.style.fontSize = currentFontSize + 'px';
+
+    // ★ 2) クッキーからテーマを読み込む
+    let savedTheme = getCookie('theme');
+    if (savedTheme === 'dark') {
+        document.body.classList.add('dark-mode');
+    }
 
     // クッキーから selected_region を取得し、region セレクトボックスの値を設定
     if (regionSelect) {
@@ -77,21 +93,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // 文字サイズ変更
-    let currentFontSize = parseFloat(window.getComputedStyle(document.body).fontSize) || 16;
-
     if (fontIncreaseBtn) {
         fontIncreaseBtn.addEventListener('click', () => {
             console.log("Font increase button clicked");
             currentFontSize = Math.min(currentFontSize + 2, 36);
             document.body.style.fontSize = currentFontSize + 'px';
+            setCookie('fontSize', currentFontSize);
         });
     }
-
     if (fontDecreaseBtn) {
         fontDecreaseBtn.addEventListener('click', () => {
             console.log("Font decrease button clicked");
             currentFontSize = Math.max(currentFontSize - 2, 10);
             document.body.style.fontSize = currentFontSize + 'px';
+            setCookie('fontSize', currentFontSize);
         });
     }
 
@@ -100,11 +115,12 @@ document.addEventListener('DOMContentLoaded', () => {
         themeToggleBtn.addEventListener('click', () => {
             console.log("Theme toggle button clicked");
             document.body.classList.toggle('dark-mode');
+            const isDark = document.body.classList.contains('dark-mode');
+            setCookie('theme', isDark ? 'dark' : 'light');
         });
     }
 
     // フォーム送信時のイベントハンドラー
-    const form = document.querySelector('form');
     if (form) {
         form.addEventListener('submit', (e) => {
             e.preventDefault();
