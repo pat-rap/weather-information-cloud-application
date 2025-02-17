@@ -4,7 +4,6 @@ WORKDIR /app
 
 COPY ./app /app/app
 COPY ./db.sql /app/db.sql
-COPY ./.env /app/.env
 
 RUN pip install --no-cache-dir -r /app/app/requirements.txt
 

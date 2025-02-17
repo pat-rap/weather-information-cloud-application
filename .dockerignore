@@ -8,4 +8,4 @@ tests/
 .gitignore
 .python-version
 requirements.txt
-
+.env

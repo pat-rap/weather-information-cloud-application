@@ -16,14 +16,20 @@ def get_db_connection():
         conn = psycopg.connect(database_url)
         return conn
 
-    # 環境変数 DATABASE_URL が設定されていない場合 (Cloud Run) は、Cloud Run 組み込みの Cloud SQL 接続を使用
-    DB_USER = os.environ.get("DB_USER")
-    DB_PASS = os.environ.get("DB_PASS")
-    DB_NAME = os.environ.get("DB_NAME")
-    # INSTANCE_CONNECTION_NAME は環境変数から取得しない
-    # Cloud Run 組み込みの Cloud SQL 接続を使用する場合の接続文字列
-    conn_string = f"postgresql://{DB_USER}:{DB_PASS}@{DB_NAME}?host=/cloudsql/{os.environ.get('CLOUD_SQL_CONNECTION_NAME')}"
-    conn = psycopg.connect(conn_string)
+    # Cloud Run + Cloud SQL用
+    cloud_sql_connection_name = os.environ["CLOUD_SQL_CONNECTION_NAME"]
+    db_socket_dir = "/cloudsql"
+    db_host = f"{db_socket_dir}/{cloud_sql_connection_name}"  # Unixソケットを指定
+    db_user = os.environ["DB_USER"]
+    db_pass = os.environ["DB_PASS"]
+    db_name = os.environ["DB_NAME"]
+
+    conn = psycopg.connect(
+        host=db_host,
+        user=db_user,
+        password=db_pass,
+        dbname=db_name
+    )
     return conn
     
 def execute_sql(sql: str, params=None, fetchone=False, fetchall=False):
