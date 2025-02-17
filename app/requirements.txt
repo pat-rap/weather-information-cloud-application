@@ -1,0 +1,15 @@
+fastapi
+uvicorn[standard]
+psycopg[binary]
+python-dotenv
+python-jose
+PyJWT
+requests
+beautifulsoup4
+lxml
+jinja2
+python-multipart
+feedparser
+chardet
+tenacity
+schedule
