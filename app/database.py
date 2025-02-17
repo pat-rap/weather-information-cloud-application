@@ -9,12 +9,23 @@ logger = logging.getLogger(__name__)
 
 load_dotenv()
 
-DATABASE_URL = os.environ.get("DATABASE_URL")
-
 def get_db_connection():
-    conn = psycopg.connect(DATABASE_URL)
-    return conn
+    # 環境変数 DATABASE_URL が設定されている場合 (ローカル開発時) はそれを使用
+    database_url = os.environ.get("DATABASE_URL")
+    if database_url:
+        conn = psycopg.connect(database_url)
+        return conn
 
+    # 環境変数 DATABASE_URL が設定されていない場合 (Cloud Run) は、Cloud Run 組み込みの Cloud SQL 接続を使用
+    DB_USER = os.environ.get("DB_USER")
+    DB_PASS = os.environ.get("DB_PASS")
+    DB_NAME = os.environ.get("DB_NAME")
+    # INSTANCE_CONNECTION_NAME は環境変数から取得しない
+    # Cloud Run 組み込みの Cloud SQL 接続を使用する場合の接続文字列
+    conn_string = f"postgresql://{DB_USER}:{DB_PASS}@{DB_NAME}?host=/cloudsql/{os.environ.get('CLOUD_SQL_CONNECTION_NAME')}"
+    conn = psycopg.connect(conn_string)
+    return conn
+    
 def execute_sql(sql: str, params=None, fetchone=False, fetchall=False):
     conn = None  # 初期化
     try:
